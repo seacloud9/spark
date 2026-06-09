@@ -126,13 +126,24 @@ Infrastructure landed in Phase A:
 
 `procedural-splats` stayed deferred (textSplats font flakiness).
 
-### Phase B — Time-locked animation scenes (≈ 5–8 commits, 1 session)
+### Phase B — Time-locked animation scenes (foundation done, Tier 4 ports continuing)
 
-Extend `scenes.mjs` to support `{ time?: number, fixedFrameCount?: number }` in scene configs. Update all three backend fixtures to write the fixed time into the Spark render call. Add Tier 4 scenes one or two per commit.
+Foundation landed in commit `3d85821`:
 
-Dependency: SparkRenderer's `time` uniform must be settable from the outside (it currently reads `performance.now()`). May need a Spark API change to make this explicit. Tracked as a soft prerequisite.
+- `scenes.mjs` scene configs accept `time?: number` (seconds). The three fixtures set `spark.time = sceneCfg.time` before the `spark.update()` call so any time-dependent shader code (DoF jitter, sort fade-in, dyno modifiers reading the `time` uniform) sees a deterministic value rather than the wall clock.
+- `SparkRenderer.time?: number` was already public — `spark.update()` reads `this.time ?? this.clock.getElapsedTime()`. No Spark API change was needed; this was a soft prerequisite that turned out to be already met.
 
-Exit: matrix has 22 scenes. Animation parity at a fixed timestamp is bit-perfect across backends.
+First time-driven scene: `animatedWarp` (also in `3d85821`). Mirrors the animated portion of `examples/glsl` with a dyno `warpRadial` block driven by `animateT = dyno.dynoFloat(1.5)`. Bit-perfect parity at the fixed time.
+
+Tier 4 ports still pending (~1-2 hours per scene, each ports to scenes.mjs):
+
+- `splat-transitions` — 4-effect switching system (spheric, explosion, flow, morph). Port the simplest effect (spheric) first as a single scene; the rest can land later.
+- `splat-flow` — 3 splat URLs + dali-env.glb sky + a substantial custom dyno transition pipeline with hash-based per-splat behaviour.
+- `particle-animation` — procedural cloud generator (~20K splats, octave noise, wind, sky.jpeg). The static frame is parity-able once the generator is replicated inline.
+- `particle-simulation` — physics step per frame; deterministic-frame parity needs a fixed simulation step count.
+- `streaming-lod` — depends on streaming the LoD over time; static-frame parity is meaningless until streaming completes (or until we mock the streaming layer).
+
+Exit (when Tier 4 ports finish): matrix at ~21 scenes (5 Tier 1 + 2 Tier 2 + 10 Tier 3 + 1 demonstrator + 5 Tier 4). Animation parity at a fixed timestamp bit-perfect across backends.
 
 ### Phase C — Shader-effect scenes (≈ 4 commits, 1 session)
 
