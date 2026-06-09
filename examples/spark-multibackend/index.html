@@ -26,48 +26,64 @@
         top: 12px;
         left: 12px;
         z-index: 100;
-        background: rgba(0, 0, 0, 0.55);
+        background: rgba(0, 0, 0, 0.6);
         border-radius: 8px;
         padding: 10px 14px;
         font-size: 13px;
         line-height: 1.4;
-        max-width: 360px;
+        width: 260px;
+        max-height: calc(100vh - 24px);
+        overflow-y: auto;
         pointer-events: auto;
       }
       .overlay h1 {
         font-size: 14px;
-        margin: 0 0 6px;
+        margin: 0 0 8px;
         color: #fff;
       }
-      .overlay .row {
-        margin-top: 6px;
+      .overlay .section-label {
+        display: block;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #8e98a8;
+        margin: 10px 0 4px;
       }
-      .overlay .row b {
-        color: #fff;
+      .overlay .engines {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
       }
-      .overlay a {
-        color: #6abff6;
-        text-decoration: none;
-        margin-right: 6px;
-        white-space: nowrap;
+      .overlay .scenes {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px 8px;
       }
-      .overlay a.active {
-        color: #fff;
-        text-decoration: underline;
-      }
-      .overlay a:hover {
-        color: #fff;
-      }
-      .overlay select {
-        background: rgba(255, 255, 255, 0.08);
-        color: #fff;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        padding: 2px 4px;
+      .overlay a.chip {
+        display: inline-block;
+        padding: 4px 8px;
         border-radius: 4px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #cdd4e0;
+        text-decoration: none;
         font-size: 12px;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden;
+      }
+      .overlay a.chip:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+      }
+      .overlay a.chip.active {
+        background: #2f6cb0;
+        color: #fff;
+        font-weight: 600;
       }
       .overlay .meta {
-        margin-top: 8px;
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
         font-size: 12px;
         opacity: 0.75;
       }
@@ -82,14 +98,10 @@
     <canvas id="view"></canvas>
     <div class="overlay" id="overlay">
       <h1>Spark · Multi-backend playground</h1>
-      <div class="row">
-        <b>Engine:</b>
-        <span id="engineLinks"></span>
-      </div>
-      <div class="row">
-        <b>Scene:</b>
-        <select id="sceneSelect"></select>
-      </div>
+      <span class="section-label">Engine</span>
+      <div class="engines" id="engineLinks"></div>
+      <span class="section-label">Scene</span>
+      <div class="scenes" id="sceneLinks"></div>
       <div class="meta" id="meta">Loading…</div>
     </div>
 
@@ -133,20 +145,20 @@
         const a = document.createElement("a");
         a.href = makeUrl({ engine: e });
         a.textContent = e;
-        if (e === engine) a.className = "active";
+        a.className = "chip";
+        if (e === engine) a.classList.add("active");
         engineLinks.appendChild(a);
       }
-      const sceneSelect = document.getElementById("sceneSelect");
+      const sceneLinks = document.getElementById("sceneLinks");
       for (const name of Object.keys(SCENES)) {
-        const opt = document.createElement("option");
-        opt.value = name;
-        opt.textContent = name;
-        if (name === sceneName) opt.selected = true;
-        sceneSelect.appendChild(opt);
+        const a = document.createElement("a");
+        a.href = makeUrl({ scene: name });
+        a.textContent = name;
+        a.title = name;
+        a.className = "chip";
+        if (name === sceneName) a.classList.add("active");
+        sceneLinks.appendChild(a);
       }
-      sceneSelect.addEventListener("change", () => {
-        window.location.search = makeUrl({ scene: sceneSelect.value });
-      });
       const meta = document.getElementById("meta");
 
       function setMeta(text) {

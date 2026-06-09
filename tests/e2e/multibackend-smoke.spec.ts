@@ -44,6 +44,21 @@ for (const engine of ENGINES) {
       page.locator(`#engineLinks a.active`),
     ).toHaveText(engine);
 
+    // Scene chip row must contain ALL 19 catalogue entries (always-visible
+    // navigation, not a dropdown). Active scene should be highlighted.
+    const sceneNames = await page
+      .locator("#sceneLinks a")
+      .allTextContents();
+    // eslint-disable-next-line no-console
+    console.log(
+      `[multibackend ${engine}] sceneNames=${sceneNames.length}:`,
+      sceneNames,
+    );
+    expect(sceneNames.length).toBeGreaterThanOrEqual(19);
+    expect(sceneNames).toContain("axes");
+    expect(sceneNames).toContain("envMap");
+    expect(sceneNames).toContain("splatDissolve");
+
     if (errors.length > 0) {
       // eslint-disable-next-line no-console
       console.log(`[multibackend ${engine}] errors:`, errors);
