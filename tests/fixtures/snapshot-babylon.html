@@ -27,8 +27,11 @@
         Texture,
         Vector3,
       } from "@babylonjs/core";
-      import { constructAxes, SplatMesh } from "/src/index.ts";
       import { SparkBabylonHost } from "/src/backends/babylon/SparkBabylonHost.ts";
+      import { getScene, getSceneName } from "/tests/fixtures/scenes.mjs";
+
+      const sceneName = getSceneName();
+      const sceneCfg = getScene(sceneName);
 
       const canvas = document.querySelector("#view");
       const engine = new Engine(canvas, false, {
@@ -42,8 +45,8 @@
       scene.autoClear = true;
       // Babylon refuses to render a scene without an active camera, even
       // when all visible content comes from a background Layer. A dummy
-      // FreeCamera at origin satisfies the requirement without affecting
-      // the Layer-composited image.
+      // FreeCamera satisfies the guard without affecting the composited
+      // image.
       const placeholderCam = new FreeCamera(
         "placeholder",
         new Vector3(0, 0, 0),
@@ -57,27 +60,18 @@
         width: 1024,
         height: 768,
         sparkRendererOptions: { enableLod: false, minSortIntervalMs: 0 },
-        clearColor: 0x10151c,
+        clearColor: sceneCfg.clearColor,
       });
 
       host.setCamera({
-        position: [0.9, 0.7, 1.9],
-        lookAt: [0, 0, 0],
-        fov: 45,
-        near: 0.01,
-        far: 10,
+        position: sceneCfg.camera.position,
+        lookAt: sceneCfg.camera.lookAt,
+        fov: sceneCfg.camera.fov,
+        near: sceneCfg.camera.near,
+        far: sceneCfg.camera.far,
       });
 
-      const mesh = new SplatMesh({
-        constructSplats: (splats) => {
-          constructAxes({
-            splats,
-            scale: 0.45,
-            axisRadius: 0.025,
-            axisShadowScale: 1.5,
-          });
-        },
-      });
+      const mesh = sceneCfg.build();
       await mesh.initialized;
       host.add(mesh);
 
@@ -93,6 +87,7 @@
 
       window.sparkBabylonSnapshotReady = {
         backend: "babylon",
+        scene: sceneName,
         engineVersion: Engine.Version,
         meshSplats: mesh.numSplats,
         activeSplats: host.sparkRenderer.activeSplats,

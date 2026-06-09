@@ -17,24 +17,24 @@
   <body>
     <canvas id="view" width="1024" height="768"></canvas>
     <script type="module">
-      import * as THREE from "three";
-      import { constructAxes, SparkRenderer, SplatMesh } from "/src/index.ts";
+      import { SparkRenderer } from "/src/index.ts";
       import { registerSparkAFrame } from "/src/backends/aframe/SparkAFrameIntegration.ts";
+      import {
+        THREE,
+        getScene,
+        getSceneName,
+      } from "/tests/fixtures/scenes.mjs";
 
-      // We deliberately do NOT load A-Frame from CDN. The CDN UMD bundle
-      // ships its own Three.js (r173) which collides with Spark's Three
-      // (r180), so cross-namespace WebGLRenderTarget/DataTexture traffic
-      // breaks the render. The same incompatibility would exist for any
-      // production A-Frame deployment that does not share Three at the
-      // bundler level — that is the *real* requirement for A-Frame parity.
-      //
-      // To exercise registerSparkAFrame against a real Three render we use
-      // a minimal structural mock of A-Frame's globals: a renderer + scene
-      // + camera + a systems map + a registerSystem/registerComponent
-      // shim. This is exactly the surface registerSparkAFrame consumes;
-      // the same code paths run as they would inside a bundler-resolved
-      // <a-scene>, and the render uses a single shared THREE so the
-      // resulting PNG is a true parity baseline against snapshot-three.
+      // We deliberately do NOT load A-Frame from CDN. A-Frame's npm and CDN
+      // builds both bake their own super-three fork into the bundle, so
+      // cross-namespace WebGLRenderTarget / DataTexture traffic breaks the
+      // render. registerSparkAFrame is exercised against a minimal mock of
+      // A-Frame's globals — the same code paths run that would inside a
+      // bundler-resolved <a-scene>, and the render uses one shared THREE.
+      // See tmp/README.md "A-Frame fixture strategy".
+
+      const sceneName = getSceneName();
+      const sceneCfg = getScene(sceneName);
 
       const canvas = document.querySelector("#view");
       const renderer = new THREE.WebGLRenderer({
@@ -43,12 +43,25 @@
         preserveDrawingBuffer: true,
       });
       renderer.setSize(1024, 768, false);
-      renderer.setClearColor(0x10151c, 1);
+      renderer.setClearColor(sceneCfg.clearColor, 1);
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, 1024 / 768, 0.01, 10);
-      camera.position.set(0.9, 0.7, 1.9);
-      camera.lookAt(0, 0, 0);
+      const camera = new THREE.PerspectiveCamera(
+        sceneCfg.camera.fov,
+        1024 / 768,
+        sceneCfg.camera.near,
+        sceneCfg.camera.far,
+      );
+      camera.position.set(
+        sceneCfg.camera.position[0],
+        sceneCfg.camera.position[1],
+        sceneCfg.camera.position[2],
+      );
+      camera.lookAt(
+        sceneCfg.camera.lookAt[0],
+        sceneCfg.camera.lookAt[1],
+        sceneCfg.camera.lookAt[2],
+      );
 
       const systems = {};
       const sceneElMock = {
@@ -58,7 +71,6 @@
         hasLoaded: true,
         systems,
         addEventListener(_event, handler) {
-          // Scene is already "loaded" — fire any 'loaded' handler immediately.
           if (typeof handler === "function") {
             queueMicrotask(handler);
           }
@@ -76,8 +88,8 @@
           systems[name] = instance;
         },
         registerComponent(_name, _def) {
-          // The constructAxes scene does not use the URL-driven spark-splat
-          // component; registration is a no-op for this fixture.
+          // The procedural scenes do not use spark-splat (URL-driven);
+          // component registration is a no-op for these fixtures.
         },
       };
 
@@ -85,16 +97,7 @@
         sparkRendererOptions: { enableLod: false, minSortIntervalMs: 0 },
       });
 
-      const mesh = new SplatMesh({
-        constructSplats: (splats) => {
-          constructAxes({
-            splats,
-            scale: 0.45,
-            axisRadius: 0.025,
-            axisShadowScale: 1.5,
-          });
-        },
-      });
+      const mesh = sceneCfg.build();
       await mesh.initialized;
       scene.add(mesh);
 
@@ -106,6 +109,7 @@
 
       window.sparkAFrameSnapshotReady = {
         backend: "aframe",
+        scene: sceneName,
         meshSplats: mesh.numSplats,
         activeSplats: spark.activeSplats,
       };
