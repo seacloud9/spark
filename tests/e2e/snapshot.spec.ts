@@ -202,3 +202,129 @@ for (const scene of SCENES) {
     });
   });
 }
+
+test("renders the full parity mosaic", async () => {
+  // One wide review image with every scene x backend in a (scenes) x 3 grid:
+  // rows are scenes in the SCENES order, columns are three / aframe / babylon.
+  // Reviewers see the entire parity state in one PNG without flipping between
+  // 15 separate files.
+  const backends = ["three", "aframe", "babylon"] as const;
+  const cells: PNG[][] = [];
+  for (const scene of SCENES) {
+    const row: PNG[] = [];
+    for (const backend of backends) {
+      const buf = await readFile(path.join(tmpDir, `${backend}-${scene}.png`));
+      row.push(PNG.sync.read(buf));
+    }
+    cells.push(row);
+  }
+
+  const w = cells[0][0].width;
+  const h = cells[0][0].height;
+  for (const row of cells) {
+    for (const cell of row) {
+      expect(cell.width).toBe(w);
+      expect(cell.height).toBe(h);
+    }
+  }
+
+  const gap = 16;
+  const cols = backends.length;
+  const rows = SCENES.length;
+  const mosaicWidth = cols * w + (cols - 1) * gap;
+  const mosaicHeight = rows * h + (rows - 1) * gap;
+  const mosaic = new PNG({ width: mosaicWidth, height: mosaicHeight });
+  for (let i = 0; i < mosaic.data.length; i += 4) {
+    mosaic.data[i] = 0x12;
+    mosaic.data[i + 1] = 0x16;
+    mosaic.data[i + 2] = 0x1d;
+    mosaic.data[i + 3] = 0xff;
+  }
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cell = cells[r][c];
+      const xOff = c * (w + gap);
+      const yOff = r * (h + gap);
+      for (let y = 0; y < h; y++) {
+        const srcRow = y * w * 4;
+        const dstRow = (y + yOff) * mosaicWidth * 4 + xOff * 4;
+        mosaic.data.set(cell.data.subarray(srcRow, srcRow + w * 4), dstRow);
+      }
+    }
+  }
+
+  await writeFile(
+    path.join(tmpDir, "parity-mosaic.png"),
+    PNG.sync.write(mosaic),
+  );
+});
+
+test("writes parity-summary.json", async () => {
+  // Machine-readable summary of every pairwise diff in the matrix. CI uploads
+  // this alongside tmp/ so dashboards / status checks can read pixel counts
+  // without having to re-decode PNGs.
+  interface ScenePairResult {
+    diff: number;
+    ratio: number;
+  }
+  interface SceneEntry {
+    width: number;
+    height: number;
+    pixels: number;
+    threeVsAFrame: ScenePairResult;
+    threeVsBabylon: ScenePairResult;
+  }
+  const summary: {
+    generatedAt: string;
+    sceneCount: number;
+    pixelmatchThreshold: number;
+    scenes: Record<string, SceneEntry>;
+  } = {
+    generatedAt: new Date().toISOString(),
+    sceneCount: SCENES.length,
+    pixelmatchThreshold: 0.1,
+    scenes: {},
+  };
+
+  for (const scene of SCENES) {
+    const three = PNG.sync.read(
+      await readFile(path.join(tmpDir, `three-${scene}.png`)),
+    );
+    const aframe = PNG.sync.read(
+      await readFile(path.join(tmpDir, `aframe-${scene}.png`)),
+    );
+    const babylon = PNG.sync.read(
+      await readFile(path.join(tmpDir, `babylon-${scene}.png`)),
+    );
+    const total = three.width * three.height;
+    const diffAF = pixelmatch(
+      three.data,
+      aframe.data,
+      null,
+      three.width,
+      three.height,
+      { threshold: 0.1 },
+    );
+    const diffBA = pixelmatch(
+      three.data,
+      babylon.data,
+      null,
+      three.width,
+      three.height,
+      { threshold: 0.1 },
+    );
+    summary.scenes[scene] = {
+      width: three.width,
+      height: three.height,
+      pixels: total,
+      threeVsAFrame: { diff: diffAF, ratio: diffAF / total },
+      threeVsBabylon: { diff: diffBA, ratio: diffBA / total },
+    };
+  }
+
+  await writeFile(
+    path.join(tmpDir, "parity-summary.json"),
+    `${JSON.stringify(summary, null, 2)}\n`,
+  );
+});
