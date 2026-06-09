@@ -19,6 +19,7 @@ const SCENES = [
   "multi",
   "tinted",
   "helloWorld",
+  "multipleSplats",
 ] as const;
 type SceneName = (typeof SCENES)[number];
 
@@ -26,7 +27,7 @@ type SceneName = (typeof SCENES)[number];
 // timeouts than the procedural scenes. The default Playwright test
 // timeout is 30 s; URL-loaded splats from the sparkjs.dev CDN take
 // 5-20 s on first hit (cold cache) on top of the usual setup cost.
-const NETWORK_SCENES = new Set<SceneName>(["helloWorld"]);
+const NETWORK_SCENES = new Set<SceneName>(["helloWorld", "multipleSplats"]);
 
 interface BackendSnapshotMeta {
   backend: string;
@@ -76,13 +77,13 @@ for (const scene of SCENES) {
   test.describe(`scene: ${scene}`, () => {
     test(`captures three-${scene}.png`, async ({ page }) => {
       if (NETWORK_SCENES.has(scene)) {
-        test.setTimeout(180_000);
+        test.setTimeout(240_000);
       }
       await page.goto(`/tests/fixtures/snapshot-three.html?scene=${scene}`, {
         timeout: NETWORK_SCENES.has(scene) ? 120_000 : 30_000,
       });
       await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
-        timeout: 60_000,
+        timeout: NETWORK_SCENES.has(scene) ? 180_000 : 60_000,
       });
       await page
         .locator("#view")
@@ -103,13 +104,13 @@ for (const scene of SCENES) {
 
     test(`captures aframe-${scene}.png`, async ({ page }) => {
       if (NETWORK_SCENES.has(scene)) {
-        test.setTimeout(180_000);
+        test.setTimeout(240_000);
       }
       await page.goto(`/tests/fixtures/snapshot-aframe.html?scene=${scene}`, {
         timeout: NETWORK_SCENES.has(scene) ? 120_000 : 30_000,
       });
       await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
-        timeout: 60_000,
+        timeout: NETWORK_SCENES.has(scene) ? 180_000 : 60_000,
       });
       await page
         .locator("#view")
@@ -129,12 +130,12 @@ for (const scene of SCENES) {
     });
 
     test(`captures babylon-${scene}.png`, async ({ page }) => {
-      test.setTimeout(180_000);
+      test.setTimeout(NETWORK_SCENES.has(scene) ? 360_000 : 180_000);
       await page.goto(`/tests/fixtures/snapshot-babylon.html?scene=${scene}`, {
-        timeout: 90_000,
+        timeout: NETWORK_SCENES.has(scene) ? 180_000 : 90_000,
       });
       await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
-        timeout: 60_000,
+        timeout: NETWORK_SCENES.has(scene) ? 240_000 : 60_000,
       });
       await page
         .locator("#view")

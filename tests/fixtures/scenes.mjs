@@ -40,6 +40,33 @@ async function buildUrlSplat({ url, position, quaternion, scale }) {
   return { root: mesh, splatCount: mesh.numSplats };
 }
 
+async function buildMultipleSplats() {
+  // Mirrors examples/multiple-splats at a fixed frame (no orbit): two
+  // separately-loaded splat files in one Group. Tests cross-mesh sort
+  // across two URL-loaded SplatMesh instances with different scales and
+  // quaternions.
+  const butterfly = new SplatMesh({
+    url: `${ASSET_BASE}/splats/butterfly-ai.spz`,
+  });
+  butterfly.quaternion.set(1, 0, 0, 0);
+  butterfly.position.set(-1.0, 0.6, 0);
+
+  const cat = new SplatMesh({ url: `${ASSET_BASE}/splats/cat.spz` });
+  cat.quaternion.set(1, 0, 0, 0);
+  cat.scale.setScalar(0.5);
+  cat.position.set(0.6, -0.4, 0);
+
+  await Promise.all([butterfly.initialized, cat.initialized]);
+
+  const group = new THREE.Group();
+  group.add(butterfly);
+  group.add(cat);
+  return {
+    root: group,
+    splatCount: butterfly.numSplats + cat.numSplats,
+  };
+}
+
 async function buildTinted() {
   // A white-splat grid uniformly tinted via SplatMesh.recolor. The grid
   // is built with `color: new THREE.Color(1, 1, 1)` so the per-splat
@@ -244,6 +271,17 @@ export const SCENES = {
         position: [0, 0, -3],
         quaternion: [1, 0, 0, 0],
       }),
+  },
+  multipleSplats: {
+    camera: {
+      position: [0, 0, 4],
+      lookAt: [0, 0, 0],
+      fov: 50,
+      near: 0.1,
+      far: 100,
+    },
+    clearColor: 0x101820,
+    build: buildMultipleSplats,
   },
 };
 
