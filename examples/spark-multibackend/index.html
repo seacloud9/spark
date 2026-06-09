@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spark · Multi-backend playground</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0a0d12;
+        color: #cdd4e0;
+        font-family: system-ui, sans-serif;
+      }
+      #view {
+        position: absolute;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        display: block;
+        touch-action: none;
+      }
+      .overlay {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.55);
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 13px;
+        line-height: 1.4;
+        max-width: 360px;
+        pointer-events: auto;
+      }
+      .overlay h1 {
+        font-size: 14px;
+        margin: 0 0 6px;
+        color: #fff;
+      }
+      .overlay .row {
+        margin-top: 6px;
+      }
+      .overlay .row b {
+        color: #fff;
+      }
+      .overlay a {
+        color: #6abff6;
+        text-decoration: none;
+        margin-right: 6px;
+        white-space: nowrap;
+      }
+      .overlay a.active {
+        color: #fff;
+        text-decoration: underline;
+      }
+      .overlay a:hover {
+        color: #fff;
+      }
+      .overlay select {
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+      .overlay .meta {
+        margin-top: 8px;
+        font-size: 12px;
+        opacity: 0.75;
+      }
+      .overlay .error {
+        color: #ff7676;
+        margin-top: 6px;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div class="overlay" id="overlay">
+      <h1>Spark · Multi-backend playground</h1>
+      <div class="row">
+        <b>Engine:</b>
+        <span id="engineLinks"></span>
+      </div>
+      <div class="row">
+        <b>Scene:</b>
+        <select id="sceneSelect"></select>
+      </div>
+      <div class="meta" id="meta">Loading…</div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "@sparkjsdev/spark": "/src/index.ts"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE from "three";
+      import {
+        SparkRenderer,
+        babylon as sparkBabylon,
+        aframe as sparkAframe,
+      } from "@sparkjsdev/spark";
+      import { SCENES, getScene } from "/tests/fixtures/scenes.mjs";
+
+      const ENGINES = ["three", "aframe", "babylon"];
+      const params = new URLSearchParams(window.location.search);
+      const engine = ENGINES.includes(params.get("engine"))
+        ? params.get("engine")
+        : "three";
+      const sceneName = SCENES[params.get("scene")]
+        ? params.get("scene")
+        : "axes";
+
+      // Build the overlay UI now so it's visible while the engine spins up.
+      function makeUrl(updates) {
+        const next = new URLSearchParams(params);
+        for (const [k, v] of Object.entries(updates)) {
+          if (v == null) next.delete(k);
+          else next.set(k, v);
+        }
+        const qs = next.toString();
+        return qs ? `?${qs}` : "./";
+      }
+      const engineLinks = document.getElementById("engineLinks");
+      for (const e of ENGINES) {
+        const a = document.createElement("a");
+        a.href = makeUrl({ engine: e });
+        a.textContent = e;
+        if (e === engine) a.className = "active";
+        engineLinks.appendChild(a);
+      }
+      const sceneSelect = document.getElementById("sceneSelect");
+      for (const name of Object.keys(SCENES)) {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        if (name === sceneName) opt.selected = true;
+        sceneSelect.appendChild(opt);
+      }
+      sceneSelect.addEventListener("change", () => {
+        window.location.search = makeUrl({ scene: sceneSelect.value });
+      });
+      const meta = document.getElementById("meta");
+
+      function setMeta(text) {
+        meta.textContent = text;
+      }
+      function setError(text) {
+        const el = document.createElement("div");
+        el.className = "error";
+        el.textContent = text;
+        document.getElementById("overlay").appendChild(el);
+        // eslint-disable-next-line no-console
+        console.error(text);
+      }
+
+      const canvas = document.getElementById("view");
+      const sceneCfg = getScene(sceneName);
+
+      function fitCanvas() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(window.innerWidth * dpr);
+        canvas.height = Math.round(window.innerHeight * dpr);
+      }
+      fitCanvas();
+
+      try {
+        if (engine === "three") {
+          await runThree(sceneCfg);
+        } else if (engine === "aframe") {
+          await runAFrame(sceneCfg);
+        } else if (engine === "babylon") {
+          await runBabylon(sceneCfg);
+        }
+      } catch (err) {
+        setError(`Engine ${engine} failed: ${err.message}`);
+        throw err;
+      }
+
+      // ---- Engines ----
+
+      async function runThree(cfg) {
+        const renderer = new THREE.WebGLRenderer({
+          canvas,
+          antialias: false,
+          preserveDrawingBuffer: false,
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight, false);
+        renderer.setClearColor(cfg.clearColor, 1);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(
+          cfg.camera.fov,
+          window.innerWidth / window.innerHeight,
+          cfg.camera.near,
+          cfg.camera.far,
+        );
+        camera.position.set(...cfg.camera.position);
+        camera.lookAt(...cfg.camera.lookAt);
+
+        const spark = new SparkRenderer({
+          renderer,
+          ...(cfg.sparkOverrides ?? {}),
+        });
+        scene.add(spark);
+
+        const built = await cfg.build();
+        scene.add(built.root);
+        if (typeof built.postInit === "function") {
+          await built.postInit({ spark, scene, camera, renderer });
+        }
+        if (typeof cfg.time === "number") {
+          spark.time = cfg.time;
+        }
+
+        window.addEventListener("resize", () => {
+          renderer.setSize(window.innerWidth, window.innerHeight, false);
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+        });
+
+        renderer.setAnimationLoop(() => {
+          renderer.render(scene, camera);
+        });
+
+        setMeta(
+          `engine: three · scene: ${sceneName} · splats: ${built.splatCount}`,
+        );
+      }
+
+      async function runAFrame(cfg) {
+        // Production A-Frame ships a bundled super-three that collides with
+        // Spark's three; the parity fixture uses a structural AFRAME mock
+        // and so does this playground. registerSparkAFrame still runs the
+        // same code paths it would inside a bundler-resolved <a-scene>.
+        const renderer = new THREE.WebGLRenderer({
+          canvas,
+          antialias: false,
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight, false);
+        renderer.setClearColor(cfg.clearColor, 1);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(
+          cfg.camera.fov,
+          window.innerWidth / window.innerHeight,
+          cfg.camera.near,
+          cfg.camera.far,
+        );
+        camera.position.set(...cfg.camera.position);
+        camera.lookAt(...cfg.camera.lookAt);
+
+        const systems = {};
+        const mockSceneEl = {
+          renderer,
+          object3D: scene,
+          camera,
+          hasLoaded: true,
+          systems,
+          addEventListener(_e, h) {
+            if (typeof h === "function") queueMicrotask(h);
+          },
+        };
+        const aframeMock = {
+          THREE,
+          registerSystem(name, def) {
+            const inst = Object.create(def);
+            inst.el = mockSceneEl;
+            if (typeof inst.init === "function") inst.init();
+            systems[name] = inst;
+          },
+          registerComponent() {},
+        };
+        sparkAframe.registerSparkAFrame(aframeMock, {
+          sparkRendererOptions: { ...(cfg.sparkOverrides ?? {}) },
+        });
+
+        const built = await cfg.build();
+        scene.add(built.root);
+        const spark = systems.spark.spark;
+        if (typeof built.postInit === "function") {
+          await built.postInit({ spark, scene, camera, renderer });
+        }
+        if (typeof cfg.time === "number") {
+          spark.time = cfg.time;
+        }
+
+        window.addEventListener("resize", () => {
+          renderer.setSize(window.innerWidth, window.innerHeight, false);
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+        });
+
+        renderer.setAnimationLoop(() => {
+          renderer.render(scene, camera);
+        });
+
+        setMeta(
+          `engine: aframe (mock host) · scene: ${sceneName} · splats: ${built.splatCount}`,
+        );
+      }
+
+      async function runBabylon(cfg) {
+        const {
+          Color4,
+          Engine,
+          FreeCamera,
+          Layer,
+          RawTexture,
+          Scene,
+          Texture,
+          Vector3,
+        } = await import("@babylonjs/core");
+
+        const engineB = new Engine(canvas, false, {
+          preserveDrawingBuffer: true,
+          stencil: false,
+        });
+        engineB.setSize(window.innerWidth, window.innerHeight);
+
+        const scene = new Scene(engineB);
+        scene.clearColor = new Color4(0, 0, 0, 1);
+        // Babylon refuses to render a scene without an active camera, even
+        // when the only visible content is a background Layer.
+        new FreeCamera("placeholder", new Vector3(0, 0, 0), scene);
+
+        const host = new sparkBabylon.SparkBabylonHost({
+          babylon: { RawTexture, Layer, Engine, Texture, Color4 },
+          scene,
+          width: window.innerWidth,
+          height: window.innerHeight,
+          sparkRendererOptions: { ...(cfg.sparkOverrides ?? {}) },
+          clearColor: cfg.clearColor,
+        });
+        host.setCamera({
+          position: cfg.camera.position,
+          lookAt: cfg.camera.lookAt,
+          fov: cfg.camera.fov,
+          near: cfg.camera.near,
+          far: cfg.camera.far,
+        });
+
+        const built = await cfg.build();
+        host.add(built.root);
+        if (typeof built.postInit === "function") {
+          await built.postInit({
+            spark: host.sparkRenderer,
+            scene: host.threeScene,
+            camera: host.threeCamera,
+            renderer: host.threeRenderer,
+          });
+        }
+        if (typeof cfg.time === "number") {
+          host.sparkRenderer.time = cfg.time;
+        }
+
+        await scene.whenReadyAsync();
+
+        engineB.runRenderLoop(async () => {
+          await host.renderOnce();
+          scene.render();
+        });
+
+        // Resize: dispose + rebuild because SparkBabylonHost has no setSize.
+        let resizeTimer = null;
+        window.addEventListener("resize", () => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            engineB.resize();
+          }, 100);
+        });
+
+        setMeta(
+          `engine: babylon (texture bridge) · scene: ${sceneName} · splats: ${built.splatCount}`,
+        );
+      }
+    </script>
+  </body>
+</html>
