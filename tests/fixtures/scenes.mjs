@@ -18,6 +18,33 @@ import {
   SplatMesh,
 } from "/src/index.ts";
 
+async function buildTinted() {
+  // A white-splat grid uniformly tinted via SplatMesh.recolor. The grid
+  // is built with `color: new THREE.Color(1, 1, 1)` so the per-splat
+  // colour is pure white; the recolour multiplier then drives the
+  // visible hue. This demonstrates Spark's recolour modifier (different
+  // from per-splat colour) and exercises the worldModifier pipeline
+  // across backends.
+  const mesh = new SplatMesh({
+    constructSplats: (splats) => {
+      constructGrid({
+        splats,
+        extents: new THREE.Box3(
+          new THREE.Vector3(-0.7, -0.7, -0.7),
+          new THREE.Vector3(0.7, 0.7, 0.7),
+        ),
+        stepSize: 0.35,
+        pointRadius: 0.04,
+        pointShadowScale: 1.6,
+        color: new THREE.Color(1, 1, 1),
+      });
+    },
+  });
+  mesh.recolor = new THREE.Color(0.95, 0.42, 0.75);
+  await mesh.initialized;
+  return { root: mesh, splatCount: mesh.numSplats };
+}
+
 // Re-export THREE so fixtures get the same module instance.
 export { THREE };
 
@@ -164,6 +191,17 @@ export const SCENES = {
     },
     clearColor: 0x0a0e16,
     build: buildMultiMesh,
+  },
+  tinted: {
+    camera: {
+      position: [2.4, 1.8, 3.4],
+      lookAt: [0, 0, 0],
+      fov: 45,
+      near: 0.01,
+      far: 20,
+    },
+    clearColor: 0x080a14,
+    build: buildTinted,
   },
 };
 

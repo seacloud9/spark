@@ -12,7 +12,7 @@ test.beforeAll(async () => {
 
 test.describe.configure({ mode: "serial" });
 
-const SCENES = ["axes", "grid", "sphere", "multi"] as const;
+const SCENES = ["axes", "grid", "sphere", "multi", "tinted"] as const;
 type SceneName = (typeof SCENES)[number];
 
 interface BackendSnapshotMeta {
@@ -149,6 +149,56 @@ for (const scene of SCENES) {
         label: `three vs babylon / ${scene}`,
         tolerance: 0.05,
       });
+    });
+
+    test(`composes side-by-side review image (${scene})`, async () => {
+      const panels = await Promise.all([
+        readFile(path.join(tmpDir, `three-${scene}.png`)),
+        readFile(path.join(tmpDir, `aframe-${scene}.png`)),
+        readFile(path.join(tmpDir, `babylon-${scene}.png`)),
+      ]).then((bufs) => bufs.map((b) => PNG.sync.read(b)));
+
+      const [first] = panels;
+      const w = first.width;
+      const h = first.height;
+      for (const panel of panels) {
+        expect(panel.width).toBe(w);
+        expect(panel.height).toBe(h);
+      }
+
+      const gap = 16;
+      const compositeWidth = w * panels.length + gap * (panels.length - 1);
+      const composite = new PNG({ width: compositeWidth, height: h });
+      // Fill gap columns with a near-black so the panels read as separate
+      // images rather than one wide canvas.
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < compositeWidth; x++) {
+          const i = (y * compositeWidth + x) * 4;
+          composite.data[i] = 0x12;
+          composite.data[i + 1] = 0x16;
+          composite.data[i + 2] = 0x1d;
+          composite.data[i + 3] = 0xff;
+        }
+      }
+      for (let p = 0; p < panels.length; p++) {
+        const panel = panels[p];
+        const xOff = p * (w + gap);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const srcIdx = (y * w + x) * 4;
+            const dstIdx = (y * compositeWidth + (x + xOff)) * 4;
+            composite.data[dstIdx] = panel.data[srcIdx];
+            composite.data[dstIdx + 1] = panel.data[srcIdx + 1];
+            composite.data[dstIdx + 2] = panel.data[srcIdx + 2];
+            composite.data[dstIdx + 3] = panel.data[srcIdx + 3];
+          }
+        }
+      }
+
+      await writeFile(
+        path.join(tmpDir, `composite-${scene}.png`),
+        PNG.sync.write(composite),
+      );
     });
   });
 }
