@@ -36,3 +36,34 @@ test("captures a Three backend render to tmp/three-axes.png", async ({
   expect(meta.meshSplats).toBeGreaterThan(0);
   expect(meta.activeSplats).toBeGreaterThan(0);
 });
+
+test("captures an A-Frame backend render to tmp/aframe-axes.png", async ({
+  page,
+}) => {
+  await page.goto("/tests/fixtures/snapshot-aframe.html");
+  await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
+    timeout: 30_000,
+  });
+
+  const canvas = page.locator("a-scene canvas");
+  await canvas.screenshot({
+    path: path.join(tmpDir, "aframe-axes.png"),
+    omitBackground: false,
+  });
+
+  const meta = await page.evaluate(
+    () =>
+      (
+        window as Window & {
+          sparkAFrameSnapshotReady: {
+            backend: string;
+            meshSplats: number;
+            activeSplats: number;
+          };
+        }
+      ).sparkAFrameSnapshotReady,
+  );
+  expect(meta.backend).toBe("aframe");
+  expect(meta.meshSplats).toBeGreaterThan(0);
+  expect(meta.activeSplats).toBeGreaterThan(0);
+});
