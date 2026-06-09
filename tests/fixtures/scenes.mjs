@@ -187,6 +187,53 @@ async function buildDynamicLighting() {
   return { root: group, splatCount: fireplace.numSplats };
 }
 
+async function buildSplatReveal() {
+  // Inverse of splat-dissolve-effects: a custom dyno objectModifier on
+  // butterfly.spz that fades each splat in over time from opacity 0
+  // toward its native opacity, where every splat's reveal start time
+  // is hash-driven so the wings reveal in a soft cloudy pattern. At a
+  // fixed time = 1.2 the butterfly is mid-reveal — perimeter splats
+  // visible, inner splats still faded. Demonstrates the Tier 5 reveal
+  // pattern without porting splat-reveal-effects' 5-effect branching.
+  const mesh = new SplatMesh({ url: `${ASSET_BASE}/splats/butterfly.spz` });
+  mesh.quaternion.set(1, 0, 0, 0);
+  mesh.position.set(0, 0, -1.5);
+
+  const animateT = dyno.dynoFloat(1.2);
+
+  mesh.objectModifier = dyno.dynoBlock(
+    { gsplat: dyno.Gsplat },
+    { gsplat: dyno.Gsplat },
+    ({ gsplat }) => {
+      const d = new dyno.Dyno({
+        inTypes: { gsplat: dyno.Gsplat, t: "float" },
+        outTypes: { gsplat: dyno.Gsplat },
+        globals: () => [
+          dyno.unindent(`
+            vec3 hash(vec3 p) {
+              return fract(sin(p*314.159)*43758.5453);
+            }
+          `),
+        ],
+        statements: ({ inputs, outputs }) =>
+          dyno.unindentLines(`
+            ${outputs.gsplat} = ${inputs.gsplat};
+            vec3 h = hash(${inputs.gsplat}.center);
+            float startTime = h.x * 2.0;
+            float fadeIn = clamp(${inputs.t} - startTime, 0.0, 1.0);
+            ${outputs.gsplat}.rgba.w *= fadeIn;
+          `),
+      });
+      const next = d.apply({ gsplat, t: animateT }).gsplat;
+      return { gsplat: next };
+    },
+  );
+  mesh.updateGenerator();
+
+  await mesh.initialized;
+  return { root: mesh, splatCount: mesh.numSplats };
+}
+
 async function buildSplatDissolve() {
   // Mirrors examples/splat-dissolve-effects: fly.spz with a dyno
   // objectModifier that hash-drives a per-splat dissolve over time —
@@ -855,6 +902,23 @@ export const SCENES = {
     clearColor: 0x000000,
     time: 5.0,
     build: buildSplatDissolve,
+  },
+  splatReveal: {
+    // Inverse of splatDissolve: butterfly with a fade-in reveal
+    // modifier. Custom dyno (not a direct port of splat-reveal-effects
+    // because that example switches 5 different effects across 5
+    // different splat files; the parity gate measures one effect at
+    // a time). At time = 1.2 the butterfly is mid-reveal.
+    camera: {
+      position: [0, 0, 0],
+      lookAt: [0, 0, -1],
+      fov: 60,
+      near: 0.1,
+      far: 1000,
+    },
+    clearColor: 0x000000,
+    time: 1.2,
+    build: buildSplatReveal,
   },
   animatedWarp: {
     // Mirrors the animated portion of examples/glsl with a fixed
