@@ -358,7 +358,7 @@ export async function unpackPcSogsZip(
     fileMap.set(prefix + file, file);
   }
 
-  const unzipped = await new Promise<Record<string, ArrayBuffer>>(
+  const unzipped = await new Promise<Record<string, Uint8Array>>(
     (resolve, reject) => {
       unzip(
         fileBytes,
@@ -380,7 +380,11 @@ export async function unpackPcSogsZip(
 
   const extraFiles: Record<string, ArrayBuffer> = {};
   for (const [full, name] of fileMap.entries()) {
-    extraFiles[name] = unzipped[full];
+    const bytes = unzipped[full];
+    extraFiles[name] = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    ) as ArrayBuffer;
   }
 
   return await unpackPcSogs(json, extraFiles, splatEncoding);
