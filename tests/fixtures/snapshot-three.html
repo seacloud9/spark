@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Spark Three Snapshot Fixture</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #0a0d12;
+      }
+      #view {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="view" width="1024" height="768"></canvas>
+    <script type="module">
+      import * as THREE from "three";
+      import {
+        constructAxes,
+        SparkRenderer,
+        SplatMesh,
+      } from "/src/index.ts";
+
+      const canvas = document.querySelector("#view");
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: false,
+        preserveDrawingBuffer: true,
+      });
+      renderer.setSize(1024, 768, false);
+      renderer.setClearColor(0x10151c, 1);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, 1024 / 768, 0.01, 10);
+      camera.position.set(0.9, 0.7, 1.9);
+      camera.lookAt(0, 0, 0);
+
+      const spark = new SparkRenderer({
+        renderer,
+        enableLod: false,
+        minSortIntervalMs: 0,
+      });
+      scene.add(spark);
+
+      const mesh = new SplatMesh({
+        constructSplats: (splats) => {
+          constructAxes({
+            splats,
+            scale: 0.45,
+            axisRadius: 0.025,
+            axisShadowScale: 1.5,
+          });
+        },
+      });
+      scene.add(mesh);
+      await mesh.initialized;
+
+      await spark.update({ scene, camera });
+      renderer.render(scene, camera);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      renderer.render(scene, camera);
+
+      window.sparkSnapshotReady = {
+        backend: "three",
+        meshSplats: mesh.numSplats,
+        activeSplats: spark.activeSplats,
+      };
+      document.body.dataset.ready = "true";
+    </script>
+  </body>
+</html>
