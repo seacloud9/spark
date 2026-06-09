@@ -71,9 +71,8 @@
         far: sceneCfg.camera.far,
       });
 
-      const mesh = sceneCfg.build();
-      await mesh.initialized;
-      host.add(mesh);
+      const built = await sceneCfg.build();
+      host.add(built.root);
 
       await scene.whenReadyAsync();
 
@@ -89,7 +88,7 @@
         backend: "babylon",
         scene: sceneName,
         engineVersion: Engine.Version,
-        meshSplats: mesh.numSplats,
+        meshSplats: built.splatCount,
         activeSplats: host.sparkRenderer.activeSplats,
         framesRendered: frames,
         isPlaceholder: false,

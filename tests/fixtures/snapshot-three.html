@@ -61,9 +61,8 @@
       });
       scene.add(spark);
 
-      const mesh = sceneCfg.build();
-      await mesh.initialized;
-      scene.add(mesh);
+      const built = await sceneCfg.build();
+      scene.add(built.root);
 
       await spark.update({ scene, camera });
       renderer.render(scene, camera);
@@ -73,7 +72,7 @@
       window.sparkSnapshotReady = {
         backend: "three",
         scene: sceneName,
-        meshSplats: mesh.numSplats,
+        meshSplats: built.splatCount,
         activeSplats: spark.activeSplats,
       };
       document.body.dataset.ready = "true";

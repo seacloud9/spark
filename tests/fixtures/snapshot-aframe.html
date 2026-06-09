@@ -97,9 +97,8 @@
         sparkRendererOptions: { enableLod: false, minSortIntervalMs: 0 },
       });
 
-      const mesh = sceneCfg.build();
-      await mesh.initialized;
-      scene.add(mesh);
+      const built = await sceneCfg.build();
+      scene.add(built.root);
 
       const spark = systems.spark.spark;
       await spark.update({ scene, camera });
@@ -110,7 +109,7 @@
       window.sparkAFrameSnapshotReady = {
         backend: "aframe",
         scene: sceneName,
-        meshSplats: mesh.numSplats,
+        meshSplats: built.splatCount,
         activeSplats: spark.activeSplats,
       };
       document.body.dataset.ready = "true";

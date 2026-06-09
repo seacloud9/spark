@@ -12,7 +12,7 @@ test.beforeAll(async () => {
 
 test.describe.configure({ mode: "serial" });
 
-const SCENES = ["axes", "grid", "sphere"] as const;
+const SCENES = ["axes", "grid", "sphere", "multi"] as const;
 type SceneName = (typeof SCENES)[number];
 
 interface BackendSnapshotMeta {
