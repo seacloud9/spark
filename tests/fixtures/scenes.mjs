@@ -26,6 +26,20 @@ import {
 
 const ASSET_BASE = "https://sparkjs.dev/assets";
 
+// Locally-vendored test fixtures, served by the dev server from
+// tests/fixtures/assets/. Scenes that target these names get the
+// repo-local file instead of the sparkjs.dev CDN, which removes
+// network latency and CDN flakiness from the parity gate for the
+// most-used assets. Add files here as Phase F lands them.
+const VENDORED_ASSETS = new Set(["butterfly.spz"]);
+
+function splatUrl(filename) {
+  if (VENDORED_ASSETS.has(filename)) {
+    return `/tests/fixtures/assets/${filename}`;
+  }
+  return `${ASSET_BASE}/splats/${filename}`;
+}
+
 async function buildUrlSplat({ url, position, quaternion, scale }) {
   const mesh = new SplatMesh({ url });
   if (position) {
@@ -195,7 +209,7 @@ async function buildSplatReveal() {
   // fixed time = 1.2 the butterfly is mid-reveal — perimeter splats
   // visible, inner splats still faded. Demonstrates the Tier 5 reveal
   // pattern without porting splat-reveal-effects' 5-effect branching.
-  const mesh = new SplatMesh({ url: `${ASSET_BASE}/splats/butterfly.spz` });
+  const mesh = new SplatMesh({ url: `${splatUrl("butterfly.spz")}` });
   mesh.quaternion.set(1, 0, 0, 0);
   mesh.position.set(0, 0, -1.5);
 
@@ -302,7 +316,7 @@ async function buildAnimatedWarp() {
   // the animation loop; we set animateT to a deterministic 1.5 here so
   // the captured frame is reproducible. Tests that dyno-uniform-driven
   // animation is bit-perfect across backends at a fixed time.
-  const mesh = new SplatMesh({ url: `${ASSET_BASE}/splats/butterfly.spz` });
+  const mesh = new SplatMesh({ url: `${splatUrl("butterfly.spz")}` });
   mesh.quaternion.set(1, 0, 0, 0);
   mesh.position.set(0, 0, -1.5);
 
@@ -352,7 +366,7 @@ async function buildGlsl() {
   // parity is measured at a single static frame. Tests the dyno raw-
   // GLSL injection path (dyno.Dyno with globals + statements) across
   // backends.
-  const mesh = new SplatMesh({ url: `${ASSET_BASE}/splats/butterfly.spz` });
+  const mesh = new SplatMesh({ url: `${splatUrl("butterfly.spz")}` });
   mesh.quaternion.set(1, 0, 0, 0);
   mesh.position.set(0, 0, -1.5);
 
@@ -471,7 +485,7 @@ async function buildDebugColor() {
   // uses setDepthColor (greyscale depth ramp). Exercises the public
   // modifiers namespace through the parity gate.
   const butterfly = new SplatMesh({
-    url: `${ASSET_BASE}/splats/butterfly.spz`,
+    url: `${splatUrl("butterfly.spz")}`,
   });
   butterfly.quaternion.set(1, 0, 0, 0);
   butterfly.scale.setScalar(0.5);
@@ -724,7 +738,7 @@ export const SCENES = {
     clearColor: 0x000000,
     build: () =>
       buildUrlSplat({
-        url: `${ASSET_BASE}/splats/butterfly.spz`,
+        url: `${splatUrl("butterfly.spz")}`,
         position: [0, 0, -3],
         quaternion: [1, 0, 0, 0],
       }),
@@ -767,7 +781,7 @@ export const SCENES = {
     clearColor: 0x101218,
     build: () =>
       buildUrlSplat({
-        url: `${ASSET_BASE}/splats/butterfly.spz`,
+        url: `${splatUrl("butterfly.spz")}`,
         position: [0, 0, -2],
         quaternion: [1, 0, 0, 0],
       }),
