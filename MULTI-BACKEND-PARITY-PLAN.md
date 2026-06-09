@@ -177,9 +177,29 @@ Exit: CI runs without network dependency. Per-scene timeouts shrink back toward 
 
 Total: ~30 commits, 6–7 sessions to reach the AGENTS.md goal with the documented exceptions. The 4 XR/editor examples land as exception list entries in AGENTS.md.
 
-## Current Phase A progress
+## Current Phase A progress (2026-06-09)
 
-- 2 / 10 Tier 3 scenes done (`helloWorld`, `multipleSplats`).
-- 8 / 10 remaining: `debug-color`, `dynamic-lighting`, `envmap`, `glsl`, `nonlod`, `viewer`, `sogs`, `depth-of-field`, plus the partial `procedural-splats` (deferred for `textSplats` flakiness) and `extsplats`.
+**7 / 10 Tier 3 scenes done.** Matrix is now 12 scenes total: 5 procedural (Tier 1) + 7 URL-loaded.
 
-The pattern in `scenes.mjs` (`buildUrlSplat` helper + `NETWORK_SCENES` set in `tests/e2e/snapshot.spec.ts`) is reusable for each. New scenes need a position / camera / optional modifier wiring; the rest is mechanical.
+Done this session:
+- `helloWorld` — `butterfly.spz` (commit `985bdeb`).
+- `multipleSplats` — `butterfly-ai.spz` + `cat.spz` (commit `038eeef`).
+- `debugColor` — butterfly + butterfly-ai with `modifiers.setWorldNormalColor` / `setDepthColor` (commit `177e3af`).
+- `viewer` — generic single-splat viewer framing (commit `177e3af`).
+- `depthOfField` — `valley.spz` with `apertureAngle: 0.02`, `focalDistance: 5.0` via the new per-scene `sparkOverrides` plumbing (commit `b21f985`).
+- `sogs` — `sutro.zip` SOGS package, exercises `unpackPcSogsZip` and the fflate fix in `26e5f36` (commit `e35fa8a`).
+- `extSplats` — `distant-igloo.spz` loaded twice with `extSplats:false` / `extSplats:true` (commit `e35fa8a`).
+
+All seven URL scenes are bit-perfect (0 / 786432 differing pixels) across Three / A-Frame / Babylon. The `sparkOverrides` field merges into the three backend fixtures' `SparkRenderer` construction calls so per-scene Spark configuration (DoF, blur, LoD budgets, etc.) is now scene-config driven.
+
+Remaining for Phase A (next session):
+- `nonlod` — requires the `dyno` shader-graph modifier pipeline (`objectModifiers = [makeSplatIndexColoring()]`). Bigger surface than the modifiers namespace already covered by `debugColor`.
+- `glsl` — custom shader effect wiring per scene.
+- `dynamic-lighting` — `SplatEdit` + `SplatEditSdf` SDF-based light overlays. Different runtime API than the modifiers namespace.
+- `envmap` — Three.js EXRLoader + environment map texture path.
+
+`procedural-splats` stays deferred for `textSplats` font flakiness.
+
+The pattern in `scenes.mjs` (`buildUrlSplat` helper + `NETWORK_SCENES` set in `tests/e2e/snapshot.spec.ts`) is reusable for each. New scenes need a position / camera / optional modifier wiring / optional `sparkOverrides`; the rest is mechanical.
+
+Babylon network-scene budget has settled at: `test.setTimeout(540s)`, `page.goto(240s)`, `data-ready(360s)`. SOGS packages and ExtSplats float32 budgets push past tighter budgets on cold cache. Three and A-Frame use `test.setTimeout(240s)`, `page.goto(180s)`, `data-ready(180s)`.
