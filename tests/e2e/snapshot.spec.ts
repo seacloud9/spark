@@ -12,8 +12,21 @@ test.beforeAll(async () => {
 
 test.describe.configure({ mode: "serial" });
 
-const SCENES = ["axes", "grid", "sphere", "multi", "tinted"] as const;
+const SCENES = [
+  "axes",
+  "grid",
+  "sphere",
+  "multi",
+  "tinted",
+  "helloWorld",
+] as const;
 type SceneName = (typeof SCENES)[number];
+
+// Scenes that fetch splat files from the network need much higher
+// timeouts than the procedural scenes. The default Playwright test
+// timeout is 30 s; URL-loaded splats from the sparkjs.dev CDN take
+// 5-20 s on first hit (cold cache) on top of the usual setup cost.
+const NETWORK_SCENES = new Set<SceneName>(["helloWorld"]);
 
 interface BackendSnapshotMeta {
   backend: string;
@@ -62,7 +75,12 @@ async function diffParityPng(opts: {
 for (const scene of SCENES) {
   test.describe(`scene: ${scene}`, () => {
     test(`captures three-${scene}.png`, async ({ page }) => {
-      await page.goto(`/tests/fixtures/snapshot-three.html?scene=${scene}`);
+      if (NETWORK_SCENES.has(scene)) {
+        test.setTimeout(180_000);
+      }
+      await page.goto(`/tests/fixtures/snapshot-three.html?scene=${scene}`, {
+        timeout: NETWORK_SCENES.has(scene) ? 120_000 : 30_000,
+      });
       await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
         timeout: 60_000,
       });
@@ -84,7 +102,12 @@ for (const scene of SCENES) {
     });
 
     test(`captures aframe-${scene}.png`, async ({ page }) => {
-      await page.goto(`/tests/fixtures/snapshot-aframe.html?scene=${scene}`);
+      if (NETWORK_SCENES.has(scene)) {
+        test.setTimeout(180_000);
+      }
+      await page.goto(`/tests/fixtures/snapshot-aframe.html?scene=${scene}`, {
+        timeout: NETWORK_SCENES.has(scene) ? 120_000 : 30_000,
+      });
       await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
         timeout: 60_000,
       });

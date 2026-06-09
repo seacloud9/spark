@@ -18,6 +18,28 @@ import {
   constructSpherePoints,
 } from "/src/index.ts";
 
+const ASSET_BASE = "https://sparkjs.dev/assets";
+
+async function buildUrlSplat({ url, position, quaternion, scale }) {
+  const mesh = new SplatMesh({ url });
+  if (position) {
+    mesh.position.set(position[0], position[1], position[2]);
+  }
+  if (quaternion) {
+    mesh.quaternion.set(
+      quaternion[0],
+      quaternion[1],
+      quaternion[2],
+      quaternion[3],
+    );
+  }
+  if (scale !== undefined) {
+    mesh.scale.setScalar(scale);
+  }
+  await mesh.initialized;
+  return { root: mesh, splatCount: mesh.numSplats };
+}
+
 async function buildTinted() {
   // A white-splat grid uniformly tinted via SplatMesh.recolor. The grid
   // is built with `color: new THREE.Color(1, 1, 1)` so the per-splat
@@ -202,6 +224,26 @@ export const SCENES = {
     },
     clearColor: 0x080a14,
     build: buildTinted,
+  },
+  helloWorld: {
+    // Mirrors examples/hello-world: butterfly.spz from sparkjs.dev CDN,
+    // camera at origin looking down -Z, splat at z=-3. Establishes the
+    // URL-loaded splat parity pattern — a network failure or a backend
+    // that mishandles URL loading now fails the gate.
+    camera: {
+      position: [0, 0, 0],
+      lookAt: [0, 0, -1],
+      fov: 60,
+      near: 0.1,
+      far: 100,
+    },
+    clearColor: 0x000000,
+    build: () =>
+      buildUrlSplat({
+        url: `${ASSET_BASE}/splats/butterfly.spz`,
+        position: [0, 0, -3],
+        quaternion: [1, 0, 0, 0],
+      }),
   },
 };
 
