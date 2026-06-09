@@ -16,6 +16,7 @@ import {
   constructAxes,
   constructGrid,
   constructSpherePoints,
+  modifiers,
 } from "/src/index.ts";
 
 const ASSET_BASE = "https://sparkjs.dev/assets";
@@ -38,6 +39,39 @@ async function buildUrlSplat({ url, position, quaternion, scale }) {
   }
   await mesh.initialized;
   return { root: mesh, splatCount: mesh.numSplats };
+}
+
+async function buildDebugColor() {
+  // Mirrors examples/debug-color: two URL-loaded butterflies with
+  // different debug-colour modifiers. The left butterfly uses
+  // setWorldNormalColor (RGB = world-space normals); the right one
+  // uses setDepthColor (greyscale depth ramp). Exercises the public
+  // modifiers namespace through the parity gate.
+  const butterfly = new SplatMesh({
+    url: `${ASSET_BASE}/splats/butterfly.spz`,
+  });
+  butterfly.quaternion.set(1, 0, 0, 0);
+  butterfly.scale.setScalar(0.5);
+  butterfly.position.set(-0.5, 0, -1.5);
+
+  const butterfly2 = new SplatMesh({
+    url: `${ASSET_BASE}/splats/butterfly-ai.spz`,
+  });
+  butterfly2.quaternion.set(1, 0, 0, 0);
+  butterfly2.position.set(0.5, 0, -1.5);
+
+  await Promise.all([butterfly.initialized, butterfly2.initialized]);
+
+  modifiers.setWorldNormalColor(butterfly);
+  modifiers.setDepthColor(butterfly2, 1, 2, true);
+
+  const group = new THREE.Group();
+  group.add(butterfly);
+  group.add(butterfly2);
+  return {
+    root: group,
+    splatCount: butterfly.numSplats + butterfly2.numSplats,
+  };
 }
 
 async function buildMultipleSplats() {
@@ -282,6 +316,38 @@ export const SCENES = {
     },
     clearColor: 0x101820,
     build: buildMultipleSplats,
+  },
+  debugColor: {
+    // Mirrors examples/debug-color: butterfly with setWorldNormalColor
+    // on the left, butterfly-ai with setDepthColor on the right. White
+    // clear so the depth-colour ramp reads clearly against the back.
+    camera: {
+      position: [0, 0, 0],
+      lookAt: [0, 0, -1],
+      fov: 60,
+      near: 0.1,
+      far: 1000,
+    },
+    clearColor: 0xffffff,
+    build: buildDebugColor,
+  },
+  viewer: {
+    // Mirrors examples/viewer with butterfly.spz: a single URL-loaded
+    // splat at the default viewer framing (origin camera, splat at z=-2).
+    camera: {
+      position: [0, 0, 0],
+      lookAt: [0, 0, -1],
+      fov: 75,
+      near: 0.01,
+      far: 1000,
+    },
+    clearColor: 0x101218,
+    build: () =>
+      buildUrlSplat({
+        url: `${ASSET_BASE}/splats/butterfly.spz`,
+        position: [0, 0, -2],
+        quaternion: [1, 0, 0, 0],
+      }),
   },
 };
 

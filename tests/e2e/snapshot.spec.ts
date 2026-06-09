@@ -20,6 +20,8 @@ const SCENES = [
   "tinted",
   "helloWorld",
   "multipleSplats",
+  "debugColor",
+  "viewer",
 ] as const;
 type SceneName = (typeof SCENES)[number];
 
@@ -27,7 +29,12 @@ type SceneName = (typeof SCENES)[number];
 // timeouts than the procedural scenes. The default Playwright test
 // timeout is 30 s; URL-loaded splats from the sparkjs.dev CDN take
 // 5-20 s on first hit (cold cache) on top of the usual setup cost.
-const NETWORK_SCENES = new Set<SceneName>(["helloWorld", "multipleSplats"]);
+const NETWORK_SCENES = new Set<SceneName>([
+  "helloWorld",
+  "multipleSplats",
+  "debugColor",
+  "viewer",
+]);
 
 interface BackendSnapshotMeta {
   backend: string;
