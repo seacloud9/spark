@@ -46,6 +46,69 @@ async function buildUrlSplat({ url, position, quaternion, scale }) {
   return { root: mesh, splatCount: mesh.numSplats };
 }
 
+async function buildEnvMap() {
+  // Mirrors the static initial-frame portion of examples/envmap:
+  // fireplace.spz loaded twice (mirrored across the duck), rubberduck.glb
+  // loaded from sparkjs.dev/assets/models/, and an environment map
+  // rendered from the splat scene via SparkRenderer.renderEnvMap and
+  // applied to the duck's materials with metalness=1, roughness=0.02.
+  // The example animates the duck's rotation; we capture at rotation 0.
+  // First scene in the matrix to exercise renderEnvMap + GLTFLoader
+  // through the parity gate.
+  const { GLTFLoader } = await import(
+    "/node_modules/three/examples/jsm/loaders/GLTFLoader.js"
+  );
+
+  const url = `${ASSET_BASE}/splats/fireplace.spz`;
+  const background = new SplatMesh({ url });
+  background.quaternion.set(1, 0, 0, 0);
+  background.position.set(0.5, 0, -1);
+  background.scale.setScalar(0.5);
+
+  const background2 = new SplatMesh({ url });
+  background2.quaternion.set(1, 0, 0, 0);
+  background2.rotation.y = Math.PI;
+  background2.position.set(-0.5, 0, 0);
+  background2.scale.setScalar(0.5);
+
+  await Promise.all([background.initialized, background2.initialized]);
+
+  const gltf = await new GLTFLoader().loadAsync(
+    `${ASSET_BASE}/models/rubberduck.glb`,
+  );
+  const duck = gltf.scene;
+  duck.position.set(0, 0.45, -0.4);
+
+  const group = new THREE.Group();
+  group.add(background);
+  group.add(background2);
+  group.add(duck);
+
+  return {
+    root: group,
+    splatCount: background.numSplats + background2.numSplats,
+    async postInit({ scene, renderer }) {
+      // Render a per-scene environment map from the splat backgrounds
+      // (hiding the duck so it does not occlude itself) and apply it
+      // to the duck's materials for metallic reflections.
+      const { SparkRenderer } = await import("/src/index.ts");
+      const offline = new SparkRenderer({ renderer });
+      const envMap = await offline.renderEnvMap({
+        scene,
+        worldCenter: duck.position,
+        hideObjects: [duck],
+      });
+      for (const child of duck.children) {
+        if (child.material) {
+          child.material.envMap = envMap;
+          child.material.metalness = 1.0;
+          child.material.roughness = 0.02;
+        }
+      }
+    },
+  };
+}
+
 async function buildDynamicLighting() {
   // Mirrors the static initial-frame portion of examples/dynamic-lighting:
   // fireplace.spz with three SDF-based light overlays composed through
@@ -668,6 +731,22 @@ export const SCENES = {
     },
     clearColor: 0x000000,
     build: buildDynamicLighting,
+  },
+  envMap: {
+    // Mirrors examples/envmap: fireplace.spz mirrored backgrounds with
+    // a chrome rubberduck.glb in the centre reflecting the splat scene
+    // via renderEnvMap. Camera at y=0.5 looking down -Z. Tests the
+    // SparkRenderer.renderEnvMap path + the new postInit hook that
+    // lets a scene config access the SparkRenderer after construction.
+    camera: {
+      position: [0, 0.5, 0],
+      lookAt: [0, 0.5, -1],
+      fov: 75,
+      near: 0.1,
+      far: 1000,
+    },
+    clearColor: 0x1b2037,
+    build: buildEnvMap,
   },
 };
 

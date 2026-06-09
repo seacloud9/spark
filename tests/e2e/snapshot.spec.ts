@@ -28,6 +28,7 @@ const SCENES = [
   "nonLod",
   "glsl",
   "dynamicLighting",
+  "envMap",
 ] as const;
 type SceneName = (typeof SCENES)[number];
 
@@ -46,6 +47,7 @@ const NETWORK_SCENES = new Set<SceneName>([
   "nonLod",
   "glsl",
   "dynamicLighting",
+  "envMap",
 ]);
 
 interface BackendSnapshotMeta {

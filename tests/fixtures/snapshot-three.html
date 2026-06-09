@@ -64,6 +64,9 @@
 
       const built = await sceneCfg.build();
       scene.add(built.root);
+      if (typeof built.postInit === "function") {
+        await built.postInit({ spark, scene, camera, renderer });
+      }
 
       await spark.update({ scene, camera });
       renderer.render(scene, camera);
