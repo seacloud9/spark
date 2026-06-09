@@ -12,6 +12,11 @@ const ENGINE_AWARE_EXAMPLES = [
   "depth-of-field",
   "glsl",
   "extsplats",
+  "multiple-splats",
+  "nonlod",
+  "procedural-splats",
+  "dynamic-lighting",
+  "envmap",
 ];
 
 test("examples index shows engine-aware bullet for every ported example", async ({
@@ -19,7 +24,12 @@ test("examples index shows engine-aware bullet for every ported example", async 
 }) => {
   await page.goto(`/examples/`, { timeout: 30_000 });
   for (const name of ENGINE_AWARE_EXAMPLES) {
-    const row = page.locator(`tr.engine-aware`).filter({ hasText: name });
+    // Locate by exact td.name text rather than tr substring — "extsplats"
+    // is a case-insensitive substring of "textSplats" inside other rows'
+    // descriptions, so a hasText filter over-matches.
+    const row = page
+      .locator(`tr.engine-aware`)
+      .filter({ has: page.locator("td.name", { hasText: new RegExp(`^${name}$`) }) });
     await expect(row).toHaveCount(1);
     await expect(
       row.locator(`td.engines a.aframe`),

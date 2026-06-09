@@ -70,166 +70,113 @@
     "imports": {
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
-        "@sparkjsdev/spark": "../../dist/spark.module.js"
+        "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm"
     }
   }
   </script>
   <script type="module">
     import * as THREE from "three";
     import {
-      SplatMesh,
-      SplatEdit,
-      SparkRenderer,
-      SplatEditSdf,
-      SplatEditSdfType,
-      SplatEditRgbaBlendMode,
       FpsMovement,
       PointerControls,
+      SplatEdit,
+      SplatEditRgbaBlendMode,
+      SplatEditSdf,
+      SplatEditSdfType,
+      SplatMesh,
     } from "@sparkjsdev/spark";
     import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
     const canvas = document.getElementById("canvas");
-    const scene = new THREE.Scene();
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 0.3, -2.5);
-
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    window.addEventListener('resize', onWindowResize, false);
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    // Create a SparkRenderer and add it to the scene to render all the Gsplats.
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
+    const env = await setupSparkExample({
+      canvas,
+      cameraConfig: { fov: 60, near: 0.1, far: 100, position: [0, 0.3, -2.5], lookAt: [0, 0.3, -10] },
+    });
 
     const splatURL = await getAssetFileURL("fireplace.spz");
     const fireplace = new SplatMesh({ url: splatURL });
     fireplace.quaternion.set(1, 0, 0, 0);
     fireplace.position.set(0, -1, -10);
-    scene.add(fireplace);
+    env.add(fireplace);
 
     const fpsMovement = new FpsMovement({ moveSpeed: 2 });
     const pointerControls = new PointerControls({ canvas });
 
     let night = true;
     const lights = [];
-    // Debug SDF spheres
     const helpers = [];
 
-    function createLight(scene, lightingLayer, position, color, radius, opacity) {
+    function createLight(lightingLayer, position, color, radius, opacity) {
       const light = new SplatEditSdf({
         type: SplatEditSdfType.SPHERE,
-        color: color,
-        radius: radius,
-        opacity: opacity,
+        color,
+        radius,
+        opacity,
       });
       light.position.copy(position);
 
-      // create a wireframe helper
       const helper = new THREE.Mesh(
         new THREE.SphereGeometry(radius, 16, 16),
-        new THREE.MeshBasicMaterial({ wireframe: true, color: color }),
+        new THREE.MeshBasicMaterial({ wireframe: true, color }),
       );
       helper.position.copy(light.position);
       helper.visible = false;
-      scene.add(helper);
+      env.add(helper);
       helpers.push(helper);
 
       lightingLayer.add(light);
       lights.push(light);
     }
 
-    // Create lighting layer
     const emberLayer = new SplatEdit({
       rgbaBlendMode: SplatEditRgbaBlendMode.ADD_RGBA,
       sdfSmooth: 0.1,
       softEdge: 0.8,
     });
-    scene.add(emberLayer);
+    env.add(emberLayer);
 
     const lightingLayer = new SplatEdit({
       rgbaBlendMode: SplatEditRgbaBlendMode.ADD_RGBA,
       sdfSmooth: 0.1,
       softEdge: 1.4,
     });
-    scene.add(lightingLayer);
+    env.add(lightingLayer);
 
     const ambientLayer = new SplatEdit({
       rgbaBlendMode: SplatEditRgbaBlendMode.DARKEN,
       sdfSmooth: 0.1,
       softEdge: 0.05,
     });
-    scene.add(ambientLayer);
+    env.add(ambientLayer);
 
-    // glowing embers at the base of the fire
-    createLight(
-      scene,
-      emberLayer,
-      new THREE.Vector3(0.5, -1.0, -10.5),
-      new THREE.Color(1, 0.6, 0.4),
-      0.75,
-      1,
-    );
-
-    // light in the fireplace
-    createLight(
-      scene,
-      lightingLayer,
-      new THREE.Vector3(0.3, -1.1, -10.6),
-      new THREE.Color(1, 0.95, 0.2),
-      1.6,
-      0,
-    );
-
-    // ambient light throughout the full room
-    createLight(
-      scene,
-      ambientLayer,
-      new THREE.Vector3(0, 1, -11),
-      new THREE.Color(1, 0.8, 0.6),
-      6,
-      0.8,
-    );
-    console.log(helpers);
+    createLight(emberLayer, new THREE.Vector3(0.5, -1.0, -10.5), new THREE.Color(1, 0.6, 0.4), 0.75, 1);
+    createLight(lightingLayer, new THREE.Vector3(0.3, -1.1, -10.6), new THREE.Color(1, 0.95, 0.2), 1.6, 0);
+    createLight(ambientLayer, new THREE.Vector3(0, 1, -11), new THREE.Color(1, 0.8, 0.6), 6, 0.8);
 
     let lastTime;
-
-    renderer.setAnimationLoop(time => {
+    env.run((time) => {
       const timeSeconds = time * 0.0005;
       const deltaTime = timeSeconds - (lastTime ?? timeSeconds);
       lastTime = timeSeconds;
 
-      // fpsMovement.update(deltaTime, camera);
-      pointerControls.update(deltaTime, camera);
-      camera.position.z = -2.5 - Math.sin(timeSeconds * 0.1) * 2;
-      renderer.render(scene, camera);
+      pointerControls.update(deltaTime, env.camera);
+      env.camera.position.z = -2.5 - Math.sin(timeSeconds * 0.1) * 2;
 
-      // Create flickering fire effect
-      const baseHue = 0.04; // Orange-red base hue
-      const fireHue = 0.03; // Yellow base hue
-      const hueVariation = 0.03; // Slight variation in hue
-
-      // Add some randomness to the flicker
+      const baseHue = 0.04;
+      const hueVariation = 0.03;
       const randomFlicker = Math.sin(timeSeconds * 4) * 0.5 + 0.5;
-
-      // we'll combine these to make a more natural flickering effect
-      const mediumFlicker = Math.sin(timeSeconds * 13) * 0.1 + 0.1; // Medium flicker
-      const fastFlicker = Math.sin(timeSeconds * 20) * 0.1 + 0.1; // Fast flicker
-      const slowFlicker = Math.sin(timeSeconds * 6) * 0.04 + 0.5; // Slow base flicker
-      // Combine the flickers
+      const mediumFlicker = Math.sin(timeSeconds * 13) * 0.1 + 0.1;
+      const fastFlicker = Math.sin(timeSeconds * 20) * 0.1 + 0.1;
+      const slowFlicker = Math.sin(timeSeconds * 6) * 0.04 + 0.5;
       const combinedFlicker = (slowFlicker + mediumFlicker + fastFlicker) / 3;
 
       for (let i = 0; i < lights.length - 1; i++) {
-        const h = baseHue + combinedFlicker * hueVariation; // Slightly varying orange-red hue
-        const s = 0.5 + randomFlicker * 0.3; // High saturation with slight variation
-        const l = 0.5 + combinedFlicker * 0.2; // Varying brightness
+        const h = baseHue + combinedFlicker * hueVariation;
+        const s = 0.5 + randomFlicker * 0.3;
+        const l = 0.5 + combinedFlicker * 0.2;
         lights[i].color.setHSL(h, s, l);
         lights[i].visible = night;
       }
@@ -238,13 +185,13 @@
       lights[lights.length - 1].color.setHSL(baseHue, 0.5, combinedFlicker);
     });
 
-    document.getElementById('debug').addEventListener('change', ev => {
+    document.getElementById('debug').addEventListener('change', (ev) => {
       const visible = ev.target.checked;
-      for (let helper of helpers) {
+      for (const helper of helpers) {
         helper.visible = visible;
       }
     });
-    document.getElementById('daynight').addEventListener('change', ev => {
+    document.getElementById('daynight').addEventListener('change', () => {
       night = !night;
     });
   </script>

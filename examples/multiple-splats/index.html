@@ -29,37 +29,25 @@
       "imports": {
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
-        "@sparkjsdev/spark": "../../dist/spark.module.js"
+        "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm"
       }
     }
   </script>
   <script type="module">
-    import * as THREE from "three";
-    import { SparkRenderer, SplatMesh, PackedSplats } from "@sparkjsdev/spark";
-    import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { PackedSplats, SplatMesh } from "@sparkjsdev/spark";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 0, 6.5);
-    camera.lookAt(0, 0, 0);
-
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(new THREE.Color(0xFFFFFF), 1);
-
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
-
-    document.body.appendChild(renderer.domElement);
-
-    window.addEventListener('resize', onWindowResize, false);
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    const env = await setupSparkExample({
+      cameraConfig: {
+        fov: 50,
+        position: [0, 0, 6.5],
+        lookAt: [0, 0, 0],
+      },
+      clearColor: 0xffffff,
+    });
 
     let splatURL = await getAssetFileURL("butterfly-ai.spz");
     const butterflySplats = new PackedSplats({ url: splatURL });
@@ -67,7 +55,7 @@
     for (let i = 0; i < 6; i++) {
       const splat = new SplatMesh({ packedSplats: butterflySplats });
       splat.quaternion.set(1, 0, 0, 0);
-      scene.add(splat);
+      env.add(splat);
       butterflies.push(splat);
     }
 
@@ -75,10 +63,12 @@
     const cat = new SplatMesh({ url: splatURL });
     cat.quaternion.set(1, 0, 0, 0);
     cat.scale.setScalar(0.5);
-    scene.add(cat);
+    env.add(cat);
 
-    // Setup mouse controls to orbit the camera around
-    const controls = new OrbitControls(camera, renderer.domElement);
+    // OrbitControls hooks pointer events on the visible canvas. Under the
+    // Babylon backend the visible canvas and env.renderer's internal canvas
+    // are the same DOM node, so the controls drive env.camera as expected.
+    const controls = new OrbitControls(env.camera, env.renderer.domElement);
     controls.target.set(0, 0, 0);
     controls.minDistance = 0.3;
     controls.maxDistance = 20;
@@ -86,7 +76,7 @@
 
     const RADIUS = 2;
 
-    renderer.setAnimationLoop(function animate(time) {
+    env.run((time) => {
       controls.update();
 
       // Rotate food
@@ -98,8 +88,6 @@
 
       // Animate food master
       cat.position.y = -0.8 + Math.sin(time / 1000) * 0.1;
-
-      renderer.render(scene, camera);
     });
   </script>
 </body>
