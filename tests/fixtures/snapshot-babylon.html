@@ -18,26 +18,17 @@
     <canvas id="view" width="1024" height="768"></canvas>
     <script type="module">
       import {
-        ArcRotateCamera,
-        Color3,
         Color4,
-        CreateBox,
         Engine,
-        HemisphericLight,
+        FreeCamera,
+        Layer,
+        RawTexture,
         Scene,
-        StandardMaterial,
+        Texture,
         Vector3,
       } from "@babylonjs/core";
-
-      // BabylonJS placeholder fixture. Spark's BabylonJS render backend has
-      // not landed yet (see the multi-backend plan in AGENTS.md), so this
-      // fixture renders a deterministic "axes" scene using three coloured
-      // Babylon boxes positioned along X/Y/Z. The image is a parity *slot*
-      // placeholder in tmp/babylon-axes.png — it lets the per-backend
-      // snapshot matrix exist and reserves the file path. Once the Babylon
-      // backend can host SplatMesh, this fixture is replaced by a real
-      // splat render against the same constructAxes scene used by the
-      // Three and A-Frame fixtures.
+      import { constructAxes, SplatMesh } from "/src/index.ts";
+      import { SparkBabylonHost } from "/src/backends/babylon/SparkBabylonHost.ts";
 
       const canvas = document.querySelector("#view");
       const engine = new Engine(canvas, false, {
@@ -47,72 +38,54 @@
       engine.setSize(1024, 768);
 
       const scene = new Scene(engine);
-      scene.clearColor = new Color4(
-        0x10 / 255,
-        0x15 / 255,
-        0x1c / 255,
-        1,
-      );
-
-      const camera = new ArcRotateCamera(
-        "cam",
-        Math.PI * 0.35,
-        Math.PI * 0.4,
-        2.6,
-        Vector3.Zero(),
+      scene.clearColor = new Color4(0, 0, 0, 1);
+      scene.autoClear = true;
+      // Babylon refuses to render a scene without an active camera, even
+      // when all visible content comes from a background Layer. A dummy
+      // FreeCamera at origin satisfies the requirement without affecting
+      // the Layer-composited image.
+      const placeholderCam = new FreeCamera(
+        "placeholder",
+        new Vector3(0, 0, 0),
         scene,
       );
+      scene.activeCamera = placeholderCam;
 
-      const light = new HemisphericLight(
-        "light",
-        new Vector3(0, 1, 0),
+      const host = new SparkBabylonHost({
+        babylon: { RawTexture, Layer, Engine, Texture, Color4 },
         scene,
-      );
-      light.intensity = 1.1;
+        width: 1024,
+        height: 768,
+        sparkRendererOptions: { enableLod: false, minSortIntervalMs: 0 },
+        clearColor: 0x10151c,
+      });
 
-      const axisLength = 0.9;
-      const axisWidth = 0.06;
-      const axes = [
-        {
-          name: "X",
-          size: [axisLength, axisWidth, axisWidth],
-          pos: [axisLength / 2, 0, 0],
-          color: new Color3(0.95, 0.15, 0.15),
-        },
-        {
-          name: "Y",
-          size: [axisWidth, axisLength, axisWidth],
-          pos: [0, axisLength / 2, 0],
-          color: new Color3(0.15, 0.95, 0.15),
-        },
-        {
-          name: "Z",
-          size: [axisWidth, axisWidth, axisLength],
-          pos: [0, 0, axisLength / 2],
-          color: new Color3(0.2, 0.45, 0.95),
-        },
-      ];
-      for (const axis of axes) {
-        const box = CreateBox(
-          `axis-${axis.name}`,
-          { width: axis.size[0], height: axis.size[1], depth: axis.size[2] },
-          scene,
-        );
-        box.position.set(axis.pos[0], axis.pos[1], axis.pos[2]);
-        const mat = new StandardMaterial(`mat-${axis.name}`, scene);
-        mat.diffuseColor = axis.color;
-        mat.specularColor = new Color3(0, 0, 0);
-        mat.emissiveColor = axis.color.scale(0.35);
-        box.material = mat;
-      }
+      host.setCamera({
+        position: [0.9, 0.7, 1.9],
+        lookAt: [0, 0, 0],
+        fov: 45,
+        near: 0.01,
+        far: 10,
+      });
 
-      scene.activeCamera = camera;
-      // Babylon needs assets (shaders, materials) ready before render() will
-      // actually draw the meshes — skipping this leaves the canvas blank.
+      const mesh = new SplatMesh({
+        constructSplats: (splats) => {
+          constructAxes({
+            splats,
+            scale: 0.45,
+            axisRadius: 0.025,
+            axisShadowScale: 1.5,
+          });
+        },
+      });
+      await mesh.initialized;
+      host.add(mesh);
+
       await scene.whenReadyAsync();
 
       let frames = 0;
       for (let i = 0; i < 10; i++) {
+        await host.renderOnce();
         scene.render();
         frames += 1;
         await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -121,10 +94,10 @@
       window.sparkBabylonSnapshotReady = {
         backend: "babylon",
         engineVersion: Engine.Version,
-        meshCount: scene.meshes.length,
-        activeMeshes: scene.getActiveMeshes().length,
+        meshSplats: mesh.numSplats,
+        activeSplats: host.sparkRenderer.activeSplats,
         framesRendered: frames,
-        isPlaceholder: true,
+        isPlaceholder: false,
       };
       document.body.dataset.ready = "true";
     </script>

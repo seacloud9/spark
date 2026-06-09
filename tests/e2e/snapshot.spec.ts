@@ -72,12 +72,14 @@ test("captures an A-Frame backend render to tmp/aframe-axes.png", async ({
   expect(meta.activeSplats).toBeGreaterThan(0);
 });
 
-test("captures a BabylonJS placeholder render to tmp/babylon-axes.png", async ({
+test("captures a BabylonJS Spark splat render to tmp/babylon-axes.png", async ({
   page,
 }) => {
   // Babylon is a large bundle; vite's first prebundle pass on CI/cold-cache
-  // can take 30+s. Bump the per-test timeout and the navigation timeout.
-  test.setTimeout(120_000);
+  // can take 30+s. The texture-bridge fixture also does extra work
+  // (Spark internal render + readPixels + Babylon Layer composite per
+  // frame), so bump both timeouts.
+  test.setTimeout(180_000);
   await page.goto("/tests/fixtures/snapshot-babylon.html", { timeout: 90_000 });
   await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
     timeout: 30_000,
@@ -96,15 +98,19 @@ test("captures a BabylonJS placeholder render to tmp/babylon-axes.png", async ({
           sparkBabylonSnapshotReady: {
             backend: string;
             engineVersion: string;
-            meshCount: number;
+            meshSplats: number;
+            activeSplats: number;
+            framesRendered: number;
             isPlaceholder: boolean;
           };
         }
       ).sparkBabylonSnapshotReady,
   );
   expect(meta.backend).toBe("babylon");
-  expect(meta.meshCount).toBeGreaterThanOrEqual(3);
-  expect(meta.isPlaceholder).toBe(true);
+  expect(meta.meshSplats).toBeGreaterThan(0);
+  expect(meta.activeSplats).toBeGreaterThan(0);
+  expect(meta.framesRendered).toBeGreaterThanOrEqual(1);
+  expect(meta.isPlaceholder).toBe(false);
 });
 
 test("Three vs A-Frame parity diff is within tolerance", async () => {
@@ -140,4 +146,40 @@ test("Three vs A-Frame parity diff is within tolerance", async () => {
   // Three fixture via registerSparkAFrame, so parity should be tight.
   // 1% tolerance covers any timing/sort jitter between the two captures.
   expect(ratio).toBeLessThan(0.01);
+});
+
+test("Three vs Babylon parity diff is within tolerance", async () => {
+  const threeBuf = await readFile(path.join(tmpDir, "three-axes.png"));
+  const babylonBuf = await readFile(path.join(tmpDir, "babylon-axes.png"));
+  const three = PNG.sync.read(threeBuf);
+  const babylon = PNG.sync.read(babylonBuf);
+
+  expect(babylon.width).toBe(three.width);
+  expect(babylon.height).toBe(three.height);
+
+  const diff = new PNG({ width: three.width, height: three.height });
+  const numDiff = pixelmatch(
+    three.data,
+    babylon.data,
+    diff.data,
+    three.width,
+    three.height,
+    { threshold: 0.1 },
+  );
+
+  await writeFile(
+    path.join(tmpDir, "parity-three-vs-babylon.png"),
+    PNG.sync.write(diff),
+  );
+
+  const total = three.width * three.height;
+  const ratio = numDiff / total;
+  console.log(
+    `[parity] three vs babylon: ${numDiff} / ${total} pixels differ (${(ratio * 100).toFixed(4)}%)`,
+  );
+  // Babylon path goes: Three offscreen render → readPixels → RawTexture →
+  // Babylon Layer composite. The CPU round-trip and Babylon's sRGB/linear
+  // texture handling can drift a few percent vs the direct Three render.
+  // 5% tolerance keeps the gate honest while accepting expected drift.
+  expect(ratio).toBeLessThan(0.05);
 });
