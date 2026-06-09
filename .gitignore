@@ -4,6 +4,7 @@ examples/js/vendor
 examples/showcase/assets
 docs/CNAME
 node_modules/
+tmp/
 site/
 site-repo/
 *.zip
