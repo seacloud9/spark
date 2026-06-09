@@ -23,6 +23,8 @@ const SCENES = [
   "debugColor",
   "viewer",
   "depthOfField",
+  "sogs",
+  "extSplats",
 ] as const;
 type SceneName = (typeof SCENES)[number];
 
@@ -36,6 +38,8 @@ const NETWORK_SCENES = new Set<SceneName>([
   "debugColor",
   "viewer",
   "depthOfField",
+  "sogs",
+  "extSplats",
 ]);
 
 interface BackendSnapshotMeta {
@@ -139,12 +143,16 @@ for (const scene of SCENES) {
     });
 
     test(`captures babylon-${scene}.png`, async ({ page }) => {
-      test.setTimeout(NETWORK_SCENES.has(scene) ? 360_000 : 180_000);
+      // Babylon's texture-bridge path adds CPU readPixels per frame and
+      // the vite cold-cache prebundle of @babylonjs/core can take 30+s
+      // before any network fetch starts. Heavy URL scenes (SOGS .zip,
+      // ExtSplats float32) push render time well past the 60s default.
+      test.setTimeout(NETWORK_SCENES.has(scene) ? 540_000 : 180_000);
       await page.goto(`/tests/fixtures/snapshot-babylon.html?scene=${scene}`, {
-        timeout: NETWORK_SCENES.has(scene) ? 180_000 : 90_000,
+        timeout: NETWORK_SCENES.has(scene) ? 240_000 : 90_000,
       });
       await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
-        timeout: NETWORK_SCENES.has(scene) ? 240_000 : 60_000,
+        timeout: NETWORK_SCENES.has(scene) ? 360_000 : 60_000,
       });
       await page
         .locator("#view")

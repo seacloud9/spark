@@ -41,6 +41,34 @@ async function buildUrlSplat({ url, position, quaternion, scale }) {
   return { root: mesh, splatCount: mesh.numSplats };
 }
 
+async function buildExtSplats() {
+  // Mirrors examples/extsplats. Loads distant-igloo.spz twice — once with
+  // the default PackedSplats float16 position precision and once with
+  // extSplats: true (float32). Both meshes live in a Group that is
+  // translated to z=1000, where float16's 1/1000 relative precision
+  // produces visible quantization on the non-extSplats copy. The
+  // example bobs the group in y over time; we capture at the static
+  // group.position = (0, 0, 1000) (sin(0) = 0).
+  const url = `${ASSET_BASE}/splats/distant-igloo.spz`;
+
+  const standard = new SplatMesh({ url, extSplats: false });
+  standard.position.set(0, -1.5, 0);
+
+  const extended = new SplatMesh({ url, extSplats: true });
+  extended.position.set(0, 1.5, 0);
+
+  await Promise.all([standard.initialized, extended.initialized]);
+
+  const group = new THREE.Group();
+  group.position.set(0, 0, 1000);
+  group.add(standard);
+  group.add(extended);
+  return {
+    root: group,
+    splatCount: standard.numSplats + extended.numSplats,
+  };
+}
+
 async function buildDebugColor() {
   // Mirrors examples/debug-color: two URL-loaded butterflies with
   // different debug-colour modifiers. The left butterfly uses
@@ -373,6 +401,47 @@ export const SCENES = {
         quaternion: [1, 0, 0, 0],
         scale: 0.5,
       }),
+  },
+  sogs: {
+    // Mirrors examples/sogs: sutro.zip (a SOGS-format splat package)
+    // loaded through SplatMesh's URL path. Exercises the SOGS reader and
+    // unpackPcSogsZip code path through the parity gate — which is also
+    // where 26e5f36 fixed the fflate Uint8Array → ArrayBuffer conversion.
+    // The example overlays a Three.js Sky helper; the parity scene drops
+    // it because Sky is a Three-only addon and the parity gate measures
+    // Spark splat rendering, not Three.js sky shading.
+    camera: {
+      position: [0, 1.5, -1.2],
+      lookAt: [0, 1.5, 0],
+      fov: 60,
+      near: 0.01,
+      far: 1000,
+    },
+    clearColor: 0x202830,
+    build: () =>
+      buildUrlSplat({
+        url: `${ASSET_BASE}/splats/sutro.zip`,
+        quaternion: [1, 0, 0, 0],
+      }),
+  },
+  extSplats: {
+    // Mirrors examples/extsplats: distant-igloo.spz at z=1000, loaded
+    // twice — once with extSplats:false (float16 positions, visible
+    // quantization at 1/1000 relative precision) and once with
+    // extSplats:true (float32 positions, clean). The example's camera
+    // is at origin and the animation orbits via SparkControls; we frame
+    // statically from z=997 looking toward (0, 0, 1000) so both meshes
+    // (at y=±1.5, z=1000) sit in front of the camera. Tests the
+    // ExtSplats render path across backends.
+    camera: {
+      position: [0, 0, 997],
+      lookAt: [0, 0, 1000],
+      fov: 75,
+      near: 0.01,
+      far: 2000,
+    },
+    clearColor: 0x080a14,
+    build: buildExtSplats,
   },
 };
 
