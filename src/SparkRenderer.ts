@@ -11,6 +11,10 @@ import {
 import { SplatAccumulator } from "./SplatAccumulator";
 import { SplatGeometry } from "./SplatGeometry";
 import { SplatWorker } from "./SplatWorker";
+import {
+  fillThreeDrawingBufferSize,
+  getThreeRenderCamera,
+} from "./backends/three/ThreeHostSceneAdapter";
 import { SPLAT_TEX_HEIGHT, SPLAT_TEX_WIDTH } from "./defines";
 import { getShaders } from "./shaders";
 import {
@@ -744,18 +748,7 @@ export class SparkRenderer extends THREE.Mesh {
     if (spark.target) {
       spark.renderSize.set(spark.target.width, spark.target.height);
     } else {
-      const renderSize = renderer.getDrawingBufferSize(spark.renderSize);
-      if (renderer.xr.isPresenting) {
-        if (renderSize.x === 1 && renderSize.y === 1) {
-          // WebXR mode on Apple Vision Pro returns 1x1 when presenting.
-          // Use a different means to figure out the render size.
-          const baseLayer = renderer.xr.getSession()?.renderState.baseLayer;
-          if (baseLayer) {
-            renderSize.x = baseLayer.framebufferWidth;
-            renderSize.y = baseLayer.framebufferHeight;
-          }
-        }
-      }
+      fillThreeDrawingBufferSize(renderer, spark.renderSize);
     }
     this.uniforms.renderSize.value.copy(spark.renderSize);
 
@@ -820,9 +813,7 @@ export class SparkRenderer extends THREE.Mesh {
 
     if (spark.autoUpdate && isNewFrame) {
       const preUpdate = spark.preUpdate && !renderer.xr.isPresenting;
-      const useCamera = renderer.xr.isPresenting
-        ? renderer.xr.getCamera()
-        : camera;
+      const useCamera = getThreeRenderCamera(renderer, camera);
       if (preUpdate) {
         spark.updateInternal({
           scene,
