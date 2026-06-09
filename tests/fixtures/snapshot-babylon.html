@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Spark BabylonJS Snapshot Fixture</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #0a0d12;
+      }
+      #view {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="view" width="1024" height="768"></canvas>
+    <script type="module">
+      import {
+        ArcRotateCamera,
+        Color3,
+        Color4,
+        CreateBox,
+        Engine,
+        HemisphericLight,
+        Scene,
+        StandardMaterial,
+        Vector3,
+      } from "@babylonjs/core";
+
+      // BabylonJS placeholder fixture. Spark's BabylonJS render backend has
+      // not landed yet (see the multi-backend plan in AGENTS.md), so this
+      // fixture renders a deterministic "axes" scene using three coloured
+      // Babylon boxes positioned along X/Y/Z. The image is a parity *slot*
+      // placeholder in tmp/babylon-axes.png — it lets the per-backend
+      // snapshot matrix exist and reserves the file path. Once the Babylon
+      // backend can host SplatMesh, this fixture is replaced by a real
+      // splat render against the same constructAxes scene used by the
+      // Three and A-Frame fixtures.
+
+      const canvas = document.querySelector("#view");
+      const engine = new Engine(canvas, false, {
+        preserveDrawingBuffer: true,
+        stencil: false,
+      });
+      engine.setSize(1024, 768);
+
+      const scene = new Scene(engine);
+      scene.clearColor = new Color4(
+        0x10 / 255,
+        0x15 / 255,
+        0x1c / 255,
+        1,
+      );
+
+      const camera = new ArcRotateCamera(
+        "cam",
+        Math.PI * 0.35,
+        Math.PI * 0.4,
+        2.6,
+        Vector3.Zero(),
+        scene,
+      );
+
+      const light = new HemisphericLight(
+        "light",
+        new Vector3(0, 1, 0),
+        scene,
+      );
+      light.intensity = 1.1;
+
+      const axisLength = 0.9;
+      const axisWidth = 0.06;
+      const axes = [
+        {
+          name: "X",
+          size: [axisLength, axisWidth, axisWidth],
+          pos: [axisLength / 2, 0, 0],
+          color: new Color3(0.95, 0.15, 0.15),
+        },
+        {
+          name: "Y",
+          size: [axisWidth, axisLength, axisWidth],
+          pos: [0, axisLength / 2, 0],
+          color: new Color3(0.15, 0.95, 0.15),
+        },
+        {
+          name: "Z",
+          size: [axisWidth, axisWidth, axisLength],
+          pos: [0, 0, axisLength / 2],
+          color: new Color3(0.2, 0.45, 0.95),
+        },
+      ];
+      for (const axis of axes) {
+        const box = CreateBox(
+          `axis-${axis.name}`,
+          { width: axis.size[0], height: axis.size[1], depth: axis.size[2] },
+          scene,
+        );
+        box.position.set(axis.pos[0], axis.pos[1], axis.pos[2]);
+        const mat = new StandardMaterial(`mat-${axis.name}`, scene);
+        mat.diffuseColor = axis.color;
+        mat.specularColor = new Color3(0, 0, 0);
+        mat.emissiveColor = axis.color.scale(0.35);
+        box.material = mat;
+      }
+
+      scene.activeCamera = camera;
+      // Babylon needs assets (shaders, materials) ready before render() will
+      // actually draw the meshes — skipping this leaves the canvas blank.
+      await scene.whenReadyAsync();
+
+      let frames = 0;
+      for (let i = 0; i < 10; i++) {
+        scene.render();
+        frames += 1;
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+
+      window.sparkBabylonSnapshotReady = {
+        backend: "babylon",
+        engineVersion: Engine.Version,
+        meshCount: scene.meshes.length,
+        activeMeshes: scene.getActiveMeshes().length,
+        framesRendered: frames,
+        isPlaceholder: true,
+      };
+      document.body.dataset.ready = "true";
+    </script>
+  </body>
+</html>

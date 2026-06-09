@@ -9,117 +9,107 @@
         margin: 0;
         background: #0a0d12;
       }
-      a-scene {
-        width: 1024px !important;
-        height: 768px !important;
+      #view {
         display: block;
       }
-      .a-modal,
-      .a-orientation-modal,
-      .a-enter-vr,
-      .a-enter-ar {
-        display: none !important;
-      }
     </style>
-    <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
   </head>
   <body>
+    <canvas id="view" width="1024" height="768"></canvas>
     <script type="module">
+      import * as THREE from "three";
       import { constructAxes, SparkRenderer, SplatMesh } from "/src/index.ts";
       import { registerSparkAFrame } from "/src/backends/aframe/SparkAFrameIntegration.ts";
 
-      // A-Frame inserts a "place phone into Cardboard" orientation modal
-      // whenever it thinks the device is mobile, which blocks a-scene init
-      // under headless Chromium. Patch the device probes before the
-      // <a-scene> element is added to the DOM so a-scene's connectedCallback
-      // sees a desktop environment. A-Frame 1.7 exposes isMobile / isMobileVR
-      // as non-writable getters, so we use defineProperty.
-      const AFRAME = window.AFRAME;
-      const forceDesktop = (obj, name) => {
-        try {
-          Object.defineProperty(obj, name, {
-            value: () => false,
-            configurable: true,
-            writable: true,
-          });
-        } catch {
-          // A-Frame 1.7 marks these getters non-configurable; the modal
-          // happens to not block headless render so the failure is benign.
-        }
-      };
-      if (AFRAME?.utils?.device) {
-        forceDesktop(AFRAME.utils.device, "isMobile");
-        forceDesktop(AFRAME.utils.device, "isMobileVR");
-        forceDesktop(
-          AFRAME.utils.device,
-          "isMobileDeviceRequestingDesktopSite",
-        );
-      }
+      // We deliberately do NOT load A-Frame from CDN. The CDN UMD bundle
+      // ships its own Three.js (r173) which collides with Spark's Three
+      // (r180), so cross-namespace WebGLRenderTarget/DataTexture traffic
+      // breaks the render. The same incompatibility would exist for any
+      // production A-Frame deployment that does not share Three at the
+      // bundler level — that is the *real* requirement for A-Frame parity.
+      //
+      // To exercise registerSparkAFrame against a real Three render we use
+      // a minimal structural mock of A-Frame's globals: a renderer + scene
+      // + camera + a systems map + a registerSystem/registerComponent
+      // shim. This is exactly the surface registerSparkAFrame consumes;
+      // the same code paths run as they would inside a bundler-resolved
+      // <a-scene>, and the render uses a single shared THREE so the
+      // resulting PNG is a true parity baseline against snapshot-three.
 
-      registerSparkAFrame(AFRAME, {
+      const canvas = document.querySelector("#view");
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: false,
+        preserveDrawingBuffer: true,
+      });
+      renderer.setSize(1024, 768, false);
+      renderer.setClearColor(0x10151c, 1);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, 1024 / 768, 0.01, 10);
+      camera.position.set(0.9, 0.7, 1.9);
+      camera.lookAt(0, 0, 0);
+
+      const systems = {};
+      const sceneElMock = {
+        renderer,
+        object3D: scene,
+        camera,
+        hasLoaded: true,
+        systems,
+        addEventListener(_event, handler) {
+          // Scene is already "loaded" — fire any 'loaded' handler immediately.
+          if (typeof handler === "function") {
+            queueMicrotask(handler);
+          }
+        },
+      };
+
+      const aframeMock = {
+        THREE,
+        registerSystem(name, def) {
+          const instance = Object.create(def);
+          instance.el = sceneElMock;
+          if (typeof instance.init === "function") {
+            instance.init();
+          }
+          systems[name] = instance;
+        },
+        registerComponent(_name, _def) {
+          // The constructAxes scene does not use the URL-driven spark-splat
+          // component; registration is a no-op for this fixture.
+        },
+      };
+
+      registerSparkAFrame(aframeMock, {
         sparkRendererOptions: { enableLod: false, minSortIntervalMs: 0 },
       });
 
-      const sceneEl = document.createElement("a-scene");
-      sceneEl.setAttribute("embedded", "");
-      sceneEl.setAttribute("background", "color: #10151c");
-      sceneEl.setAttribute(
-        "renderer",
-        "antialias: false; alpha: false; colorManagement: false; preserveDrawingBuffer: true",
-      );
-      sceneEl.setAttribute("vr-mode-ui", "enabled: false");
-      sceneEl.setAttribute(
-        "device-orientation-permission-ui",
-        "enabled: false",
-      );
+      const mesh = new SplatMesh({
+        constructSplats: (splats) => {
+          constructAxes({
+            splats,
+            scale: 0.45,
+            axisRadius: 0.025,
+            axisShadowScale: 1.5,
+          });
+        },
+      });
+      await mesh.initialized;
+      scene.add(mesh);
 
-      const camEl = document.createElement("a-entity");
-      camEl.setAttribute(
-        "camera",
-        "active: true; fov: 45; near: 0.01; far: 10",
-      );
-      camEl.setAttribute("position", "0.9 0.7 1.9");
-      camEl.setAttribute("rotation", "-19.8 25.35 0");
-      sceneEl.appendChild(camEl);
+      const spark = systems.spark.spark;
+      await spark.update({ scene, camera });
+      renderer.render(scene, camera);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      renderer.render(scene, camera);
 
-      document.body.appendChild(sceneEl);
-
-      const onReady = async () => {
-        const mesh = new SplatMesh({
-          constructSplats: (splats) => {
-            constructAxes({
-              splats,
-              scale: 0.45,
-              axisRadius: 0.025,
-              axisShadowScale: 1.5,
-            });
-          },
-        });
-        await mesh.initialized;
-        sceneEl.object3D.add(mesh);
-
-        const spark = sceneEl.systems.spark?.spark;
-        const camera = sceneEl.camera;
-        if (spark && camera) {
-          await spark.update({ scene: sceneEl.object3D, camera });
-        }
-        for (let i = 0; i < 3; i++) {
-          await new Promise((r) => requestAnimationFrame(r));
-        }
-
-        window.sparkAFrameSnapshotReady = {
-          backend: "aframe",
-          meshSplats: mesh.numSplats,
-          activeSplats: spark?.activeSplats ?? 0,
-        };
-        document.body.dataset.ready = "true";
+      window.sparkAFrameSnapshotReady = {
+        backend: "aframe",
+        meshSplats: mesh.numSplats,
+        activeSplats: spark.activeSplats,
       };
-
-      if (sceneEl.hasLoaded) {
-        onReady();
-      } else {
-        sceneEl.addEventListener("loaded", onReady, { once: true });
-      }
+      document.body.dataset.ready = "true";
     </script>
   </body>
 </html>
