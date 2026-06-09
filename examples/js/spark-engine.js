@@ -247,6 +247,21 @@ export async function setupSparkExample(opts = {}) {
   return env;
 }
 
+const ENGINE_TITLES = {
+  three:
+    "Three.js — Spark's native render host. SparkRenderer extends THREE.Mesh.",
+  aframe:
+    "A-Frame integration adapter (registerSparkAFrame). A-Frame's npm/CDN distributions bake their own Three.js fork (super-three@0.173) that cannot share Three with Spark, so this mode runs the integration's registerSystem / spark-splat code paths against a structural AFRAME mock backed by Spark's Three. Identical to what a real <a-scene> would render if its build shared Three with Spark.",
+  babylon:
+    "BabylonJS texture-bridge MVP (SparkBabylonHost). Spark renders to an internal offscreen Three canvas; Babylon composites the result as a fullscreen Layer. Babylon meshes draw on top of splats today; the native material backend is on the way (see PHASE-D-DESIGN.md).",
+};
+
+const ENGINE_LABELS = {
+  three: "three",
+  aframe: "aframe*",
+  babylon: "babylon",
+};
+
 function mountEngineSwitcher(active) {
   if (document.getElementById("spark-engine-switcher")) return;
   const wrap = document.createElement("div");
@@ -256,7 +271,7 @@ function mountEngineSwitcher(active) {
     "right:12px",
     "bottom:12px",
     "z-index:9999",
-    "background:rgba(0,0,0,0.55)",
+    "background:rgba(0,0,0,0.6)",
     "color:#fff",
     "padding:6px 10px",
     "border-radius:6px",
@@ -265,6 +280,7 @@ function mountEngineSwitcher(active) {
     "display:flex",
     "gap:6px",
     "align-items:center",
+    "max-width:380px",
   ].join(";");
   wrap.innerHTML = `<span style="opacity:0.7">engine:</span>`;
   for (const e of ["three", "aframe", "babylon"]) {
@@ -274,7 +290,8 @@ function mountEngineSwitcher(active) {
     else params.set("engine", e);
     const qs = params.toString();
     a.href = qs ? `?${qs}` : window.location.pathname;
-    a.textContent = e;
+    a.textContent = ENGINE_LABELS[e];
+    a.title = ENGINE_TITLES[e];
     a.style.cssText = [
       "color:" + (e === active ? "#fff" : "#6abff6"),
       "text-decoration:" + (e === active ? "underline" : "none"),
@@ -282,5 +299,16 @@ function mountEngineSwitcher(active) {
     ].join(";");
     wrap.appendChild(a);
   }
+  // Hint for the active engine — clarifies the integration story without
+  // burying it inside a hover tooltip on a small chip.
+  const hint = document.createElement("span");
+  hint.style.cssText = "opacity:0.7;font-style:italic;margin-left:6px";
+  const hints = {
+    three: "native host",
+    aframe: "registerSparkAFrame · structural mock (real A-Frame bundles a different Three)",
+    babylon: "SparkBabylonHost · texture bridge",
+  };
+  hint.textContent = "— " + hints[active];
+  wrap.appendChild(hint);
   document.body.appendChild(wrap);
 }

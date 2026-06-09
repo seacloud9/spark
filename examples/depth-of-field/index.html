@@ -22,50 +22,35 @@
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
         "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
         "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
       }
     }
   </script>
   <script type="module">
-    import * as THREE from "three";
-    import { SparkRenderer, SplatMesh, SparkControls } from "@sparkjsdev/spark";
+    import { SparkControls, SplatMesh } from "@sparkjsdev/spark";
     import GUI from "lil-gui";
     import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    window.addEventListener('resize', onWindowResize, false);
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    const spark = new SparkRenderer({
-      renderer,
-      apertureAngle: 0.02,
-      focalDistance: 5.0,
+    const env = await setupSparkExample({
+      cameraConfig: { fov: 60, position: [0, 0, 0], lookAt: [0, 0, -1] },
+      sparkOptions: { apertureAngle: 0.02, focalDistance: 5.0 },
     });
-    scene.add(spark);
 
-    const apertureSize = {
-      apertureSize: 0.1,
-    };
+    const apertureSize = { apertureSize: 0.1 };
     function updateApertureAngle() {
-      if (spark.focalDistance > 0) {
-        spark.apertureAngle = 2 * Math.atan(0.5 * apertureSize.apertureSize / spark.focalDistance);
+      if (env.spark.focalDistance > 0) {
+        env.spark.apertureAngle =
+          2 * Math.atan(0.5 * apertureSize.apertureSize / env.spark.focalDistance);
       } else {
-        spark.apertureAngle = 0.0;
+        env.spark.apertureAngle = 0.0;
       }
     }
     updateApertureAngle();
 
     const gui = new GUI({ title: "DoF settings" });
-    gui.add(spark, "focalDistance", 0, 15, 0.01).name("Focal plane dist")
+    gui.add(env.spark, "focalDistance", 0, 15, 0.01).name("Focal plane dist")
       .onChange(updateApertureAngle);
     gui.add(apertureSize, "apertureSize", 0, 0.4, 0.01).name("Aperture size")
       .onChange(updateApertureAngle);
@@ -74,12 +59,16 @@
     const background = new SplatMesh({ url: splatURL });
     background.quaternion.set(1, 0, 0, 0);
     background.scale.setScalar(0.5);
-    scene.add(background);
+    env.add(background);
 
-    const controls = new SparkControls({ canvas: renderer.domElement });
-    renderer.setAnimationLoop(function animate(time) {
-      controls.update(camera);
-      renderer.render(scene, camera);
+    // SparkControls binds pointer + WASD to a Three camera + renderer.
+    // Under the Babylon backend, env.renderer is still the internal Three
+    // renderer that SparkBabylonHost uses for splat sort, so the controls
+    // attach to its DOM element. Under A-Frame's structural mock, same.
+    const controls = new SparkControls({ canvas: env.renderer.domElement });
+
+    env.run(() => {
+      controls.update(env.camera);
     });
   </script>
 </body>

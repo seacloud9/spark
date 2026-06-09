@@ -21,37 +21,25 @@
       "imports": {
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
-        "@sparkjsdev/spark": "../../dist/spark.module.js"
+        "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm"
       }
     }
   </script>
   <script type="module">
-    import * as THREE from "three";
-    import { SparkRenderer, SparkControls, SplatMesh, dyno } from "@sparkjsdev/spark";
+    import { SparkControls, SplatMesh, dyno } from "@sparkjsdev/spark";
     import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
-
-    document.body.appendChild(renderer.domElement);
-
-    window.addEventListener('resize', onWindowResize, false);
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    const env = await setupSparkExample({
+      cameraConfig: { fov: 60, position: [0, 0, 0], lookAt: [0, 0, -1] },
+    });
 
     const splatURL = await getAssetFileURL("butterfly.spz");
     const butterfly = new SplatMesh({ url: splatURL });
     butterfly.quaternion.set(1, 0, 0, 0);
     butterfly.position.set(0, 0, -1.5);
-    scene.add(butterfly);
+    env.add(butterfly);
 
     // A Gsplat type is defined in GLSL in src/dyno/splats.ts as follows:
     // struct Gsplat {
@@ -123,13 +111,11 @@
     // Make sure to update the generator after updating modifiers
     butterfly.updateGenerator();
 
-    const controls = new SparkControls({ canvas: renderer.domElement });
-    renderer.setAnimationLoop(function animate(time) {
+    const controls = new SparkControls({ canvas: env.renderer.domElement });
+    env.run((time) => {
       animateT.value = time / 1000;
       butterfly.updateVersion();
-
-      controls.update(camera);
-      renderer.render(scene, camera);
+      controls.update(env.camera);
     });
   </script>
 </body>
