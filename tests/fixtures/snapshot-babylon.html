@@ -59,7 +59,11 @@
         scene,
         width: 1024,
         height: 768,
-        sparkRendererOptions: { enableLod: false, minSortIntervalMs: 0 },
+        sparkRendererOptions: {
+          enableLod: false,
+          minSortIntervalMs: 0,
+          ...(sceneCfg.sparkOverrides ?? {}),
+        },
         clearColor: sceneCfg.clearColor,
       });
 

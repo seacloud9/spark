@@ -25,7 +25,7 @@
         getSceneName,
       } from "/tests/fixtures/scenes.mjs";
 
-      // We deliberately do NOT load A-Frame from CDN. A-Frame's npm and CDN
+      // We deliberately do NOT load A-Frame from CDN. A-Frame's package and CDN
       // builds both bake their own super-three fork into the bundle, so
       // cross-namespace WebGLRenderTarget / DataTexture traffic breaks the
       // render. registerSparkAFrame is exercised against a minimal mock of
@@ -94,7 +94,11 @@
       };
 
       registerSparkAFrame(aframeMock, {
-        sparkRendererOptions: { enableLod: false, minSortIntervalMs: 0 },
+        sparkRendererOptions: {
+          enableLod: false,
+          minSortIntervalMs: 0,
+          ...(sceneCfg.sparkOverrides ?? {}),
+        },
       });
 
       const built = await sceneCfg.build();

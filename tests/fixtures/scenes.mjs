@@ -349,6 +349,31 @@ export const SCENES = {
         quaternion: [1, 0, 0, 0],
       }),
   },
+  depthOfField: {
+    // Mirrors examples/depth-of-field: valley.spz with the SparkRenderer
+    // configured for depth-of-field (apertureAngle = 0.02 rad, focal
+    // distance 5.0). The sparkOverrides field is merged into the
+    // SparkRenderer construction call across all three backend fixtures.
+    camera: {
+      position: [0, 0, 0],
+      lookAt: [0, 0, -1],
+      fov: 60,
+      near: 0.1,
+      far: 1000,
+    },
+    clearColor: 0x000000,
+    sparkOverrides: {
+      apertureAngle: 0.02,
+      focalDistance: 5.0,
+    },
+    build: () =>
+      buildUrlSplat({
+        url: `${ASSET_BASE}/splats/valley.spz`,
+        position: [0, 0, -5],
+        quaternion: [1, 0, 0, 0],
+        scale: 0.5,
+      }),
+  },
 };
 
 export function getSceneName() {

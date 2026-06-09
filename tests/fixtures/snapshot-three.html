@@ -58,6 +58,7 @@
         renderer,
         enableLod: false,
         minSortIntervalMs: 0,
+        ...(sceneCfg.sparkOverrides ?? {}),
       });
       scene.add(spark);
 
