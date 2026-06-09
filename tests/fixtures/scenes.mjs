@@ -187,6 +187,67 @@ async function buildDynamicLighting() {
   return { root: group, splatCount: fireplace.numSplats };
 }
 
+async function buildSplatDissolve() {
+  // Mirrors examples/splat-dissolve-effects: fly.spz with a dyno
+  // objectModifier that hash-drives a per-splat dissolve over time —
+  // each splat has its own start time, oscillates white, drifts along a
+  // hash-derived direction, fades out. The example pumps animateT from
+  // a setAnimationLoop wall clock; the parity scene pins animateT to
+  // a deterministic 5.0 so the captured frame is reproducible. Mid-
+  // dissolve frame shows the partial drift / fade effect.
+  const fly = new SplatMesh({ url: `${ASSET_BASE}/splats/fly.spz` });
+  fly.quaternion.set(1, 0, 0, 0);
+  fly.position.set(0, 0, -0.5);
+
+  const animateT = dyno.dynoFloat(5.0);
+
+  fly.objectModifier = dyno.dynoBlock(
+    { gsplat: dyno.Gsplat },
+    { gsplat: dyno.Gsplat },
+    ({ gsplat }) => {
+      const d = new dyno.Dyno({
+        inTypes: { gsplat: dyno.Gsplat, t: "float" },
+        outTypes: { gsplat: dyno.Gsplat },
+        globals: () => [
+          dyno.unindent(`
+            vec3 hash(vec3 p) {
+              return fract(sin(p*123.456)*123.456);
+            }
+          `),
+        ],
+        statements: ({ inputs, outputs }) =>
+          dyno.unindentLines(`
+            ${outputs.gsplat} = ${inputs.gsplat};
+            vec3 localPos = ${inputs.gsplat}.center;
+            vec3 hashVal = hash(localPos);
+            float startTime = hashVal.x * 100.0;
+            float shouldOscillate = step(startTime, ${inputs.t});
+            float oscillation = sin(${inputs.t} * 2.0 + hashVal.y * 6.28) * 0.5 + 0.5;
+            vec4 whiteColor = vec4(1.0, 1.0, 1.0, 1.0);
+            vec3 moveDirection = normalize(vec3(
+              1.0,
+              (hashVal.y - 0.5) * 0.9,
+              (hashVal.z - 0.5) * 0.9
+            ));
+            float randomSpeed = fract(sin(dot(${inputs.gsplat}.center, vec3(12., 78., 45.))) * 43758.);
+            float moveAmount = ${inputs.t} * 0.1 * randomSpeed * shouldOscillate;
+            ${outputs.gsplat}.center = ${inputs.gsplat}.center + moveDirection * moveAmount;
+            ${outputs.gsplat}.rgba = mix(${inputs.gsplat}.rgba,
+              mix(${inputs.gsplat}.rgba, whiteColor, oscillation),
+              shouldOscillate);
+            ${outputs.gsplat}.rgba.w *= mix(1.0, 1.0 - clamp(moveAmount / 2.0, 0.0, 1.0), shouldOscillate);
+          `),
+      });
+      const next = d.apply({ gsplat, t: animateT }).gsplat;
+      return { gsplat: next };
+    },
+  );
+  fly.updateGenerator();
+
+  await fly.initialized;
+  return { root: fly, splatCount: fly.numSplats };
+}
+
 async function buildAnimatedWarp() {
   // Mirrors the animated portion of examples/glsl: butterfly.spz with a
   // dyno worldModifier that warps each splat's centre by warpRadial.
@@ -779,6 +840,21 @@ export const SCENES = {
     },
     clearColor: 0x000000,
     build: buildDynamicLighting,
+  },
+  splatDissolve: {
+    // Mirrors examples/splat-dissolve-effects: fly.spz mid-dissolve at
+    // a deterministic animateT = 5.0. Tests dyno hash-driven per-splat
+    // dissolve + oscillation + drift + fade through the parity gate.
+    camera: {
+      position: [0, 0, 1],
+      lookAt: [0, 0, -0.5],
+      fov: 60,
+      near: 0.1,
+      far: 1000,
+    },
+    clearColor: 0x000000,
+    time: 5.0,
+    build: buildSplatDissolve,
   },
   animatedWarp: {
     // Mirrors the animated portion of examples/glsl with a fixed

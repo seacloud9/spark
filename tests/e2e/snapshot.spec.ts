@@ -28,6 +28,7 @@ const SCENES = [
   "nonLod",
   "glsl",
   "dynamicLighting",
+  "splatDissolve",
   "animatedWarp",
   "envMap",
 ] as const;
@@ -48,6 +49,7 @@ const NETWORK_SCENES = new Set<SceneName>([
   "nonLod",
   "glsl",
   "dynamicLighting",
+  "splatDissolve",
   "animatedWarp",
   "envMap",
 ]);
