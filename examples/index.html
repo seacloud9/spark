@@ -1,8 +1,768 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <meta http-equiv="refresh" content="0;url=/" />
-    </head>
-    <body>
-    </body>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spark · Examples</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        background: #0a0d12;
+        color: #cdd4e0;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+      }
+      .wrap {
+        max-width: 940px;
+        margin: 0 auto;
+        padding: 40px 24px 80px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        color: #fff;
+        font-size: 28px;
+      }
+      .subtitle {
+        margin: 0 0 24px;
+        color: #8e98a8;
+        font-size: 14px;
+      }
+      .legend {
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 24px;
+        font-size: 13px;
+      }
+      .legend code {
+        background: rgba(255, 255, 255, 0.08);
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+      .legend a {
+        color: #6abff6;
+      }
+      h2 {
+        font-size: 18px;
+        color: #fff;
+        margin: 32px 0 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      td {
+        padding: 6px 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        vertical-align: middle;
+      }
+      td.name {
+        font-family: ui-monospace, monospace;
+        color: #fff;
+        white-space: nowrap;
+        padding-right: 20px;
+      }
+      td.desc {
+        color: #aab2c0;
+        font-size: 13px;
+      }
+      td.engines {
+        text-align: right;
+        white-space: nowrap;
+      }
+      td.engines a {
+        display: inline-block;
+        padding: 3px 10px;
+        margin-left: 4px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #cdd4e0;
+        text-decoration: none;
+        font-size: 12px;
+      }
+      td.engines a:hover {
+        background: rgba(106, 191, 246, 0.25);
+        color: #fff;
+      }
+      td.engines a.three {
+        border-left: 2px solid #4a8;
+      }
+      td.engines a.aframe {
+        border-left: 2px solid #c84;
+      }
+      td.engines a.babylon {
+        border-left: 2px solid #88e;
+      }
+      tr.engine-aware td.name::before {
+        content: "● ";
+        color: #6c6;
+        font-size: 12px;
+      }
+      tr:not(.engine-aware) td.name::before {
+        content: "○ ";
+        color: #555;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Spark · Examples</h1>
+      <p class="subtitle">
+        Every example shipped with Spark, with one-click links to run it
+        through the Three.js, A-Frame, or BabylonJS backend.
+      </p>
+
+      <div class="legend">
+        <p style="margin: 0 0 6px">
+          <strong style="color: #6c6">●</strong> <em>engine-aware:</em> the
+          example honours <code>?engine=three|aframe|babylon</code> and
+          renders through the selected backend. Currently being rolled out
+          per example. <strong style="color: #555">○</strong>
+          <em>three-only:</em> ignores the query param today — the
+          <code>aframe</code> and <code>babylon</code> links still take you
+          to the page but render through plain Three until that example is
+          ported. See
+          <a href="../src/backends/README.md">src/backends/README.md</a>
+          and
+          <a href="../MULTI-BACKEND-PARITY-PLAN.md"
+            >MULTI-BACKEND-PARITY-PLAN.md</a
+          >
+          for the rollout plan.
+        </p>
+        <p style="margin: 0">
+          A-Frame parity uses a structural AFRAME mock (npm/CDN A-Frame
+          bundles its own Three.js fork and renders blank against
+          Spark's). Babylon uses the texture-bridge MVP — splats render
+          inside a Babylon scene but Babylon meshes draw over them; the
+          native material backend is on the way.
+        </p>
+      </div>
+
+      <h2>Getting started</h2>
+      <table>
+        <tbody>
+          <tr class="engine-aware">
+            <td class="name">hello-world</td>
+            <td class="desc">
+              Minimal SparkRenderer + SplatMesh (butterfly.spz rotating).
+            </td>
+            <td class="engines">
+              <a class="three" href="./hello-world/">three</a>
+              <a class="aframe" href="./hello-world/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./hello-world/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">viewer</td>
+            <td class="desc">Generic URL viewer for any splat file.</td>
+            <td class="engines">
+              <a class="three" href="./viewer/">three</a>
+              <a class="aframe" href="./viewer/?engine=aframe">aframe</a>
+              <a class="babylon" href="./viewer/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">multiple-splats</td>
+            <td class="desc">Several SplatMesh instances in one scene.</td>
+            <td class="engines">
+              <a class="three" href="./multiple-splats/">three</a>
+              <a class="aframe" href="./multiple-splats/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./multiple-splats/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">procedural-splats</td>
+            <td class="desc">
+              constructAxes / constructGrid / textSplats / imageSplats
+              built procedurally.
+            </td>
+            <td class="engines">
+              <a class="three" href="./procedural-splats/">three</a>
+              <a class="aframe" href="./procedural-splats/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./procedural-splats/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Modifiers &amp; shaders</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td class="name">debug-color</td>
+            <td class="desc">
+              setWorldNormalColor + setDepthColor modifiers.
+            </td>
+            <td class="engines">
+              <a class="three" href="./debug-color/">three</a>
+              <a class="aframe" href="./debug-color/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./debug-color/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">glsl</td>
+            <td class="desc">
+              Raw-GLSL injection via dyno.Dyno (waveRgb tint).
+            </td>
+            <td class="engines">
+              <a class="three" href="./glsl/">three</a>
+              <a class="aframe" href="./glsl/?engine=aframe">aframe</a>
+              <a class="babylon" href="./glsl/?engine=babylon">babylon</a>
+            </td>
+          </tr>
+          <tr>
+            <td class="name">dynamic-lighting</td>
+            <td class="desc">
+              SplatEdit + SplatEditSdf — SDF-based light overlays on
+              fireplace.spz.
+            </td>
+            <td class="engines">
+              <a class="three" href="./dynamic-lighting/">three</a>
+              <a class="aframe" href="./dynamic-lighting/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./dynamic-lighting/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">envmap</td>
+            <td class="desc">
+              SparkRenderer.renderEnvMap — chrome rubber duck reflecting
+              the splat scene.
+            </td>
+            <td class="engines">
+              <a class="three" href="./envmap/">three</a>
+              <a class="aframe" href="./envmap/?engine=aframe">aframe</a>
+              <a class="babylon" href="./envmap/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">depth-of-field</td>
+            <td class="desc">
+              SparkRenderer apertureAngle + focalDistance on valley.spz.
+            </td>
+            <td class="engines">
+              <a class="three" href="./depth-of-field/">three</a>
+              <a class="aframe" href="./depth-of-field/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./depth-of-field/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>LoD &amp; encoding</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td class="name">lod</td>
+            <td class="desc">Default LoD behaviour.</td>
+            <td class="engines">
+              <a class="three" href="./lod/">three</a>
+              <a class="aframe" href="./lod/?engine=aframe">aframe</a>
+              <a class="babylon" href="./lod/?engine=babylon">babylon</a>
+            </td>
+          </tr>
+          <tr>
+            <td class="name">lod-on-demand</td>
+            <td class="desc">LoD tree generated on demand.</td>
+            <td class="engines">
+              <a class="three" href="./lod-on-demand/">three</a>
+              <a class="aframe" href="./lod-on-demand/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./lod-on-demand/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">multi-lod</td>
+            <td class="desc">Multiple LoD trees across SplatMeshes.</td>
+            <td class="engines">
+              <a class="three" href="./multi-lod/">three</a>
+              <a class="aframe" href="./multi-lod/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./multi-lod/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">nonlod</td>
+            <td class="desc">
+              No-LoD rendering with dyno splat-index debug colouring.
+            </td>
+            <td class="engines">
+              <a class="three" href="./nonlod/">three</a>
+              <a class="aframe" href="./nonlod/?engine=aframe">aframe</a>
+              <a class="babylon" href="./nonlod/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">extsplats</td>
+            <td class="desc">
+              ExtSplats float32 vs PackedSplats float16 positions at
+              1000-unit distance.
+            </td>
+            <td class="engines">
+              <a class="three" href="./extsplats/">three</a>
+              <a class="aframe" href="./extsplats/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./extsplats/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">sogs</td>
+            <td class="desc">SOGS .zip package loader (sutro.zip).</td>
+            <td class="engines">
+              <a class="three" href="./sogs/">three</a>
+              <a class="aframe" href="./sogs/?engine=aframe">aframe</a>
+              <a class="babylon" href="./sogs/?engine=babylon">babylon</a>
+            </td>
+          </tr>
+          <tr>
+            <td class="name">streaming-lod</td>
+            <td class="desc">Streaming LoD over time.</td>
+            <td class="engines">
+              <a class="three" href="./streaming-lod/">three</a>
+              <a class="aframe" href="./streaming-lod/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./streaming-lod/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Effects &amp; animation</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td class="name">splat-transitions</td>
+            <td class="desc">
+              Animated transitions between splats (4 effects).
+            </td>
+            <td class="engines">
+              <a class="three" href="./splat-transitions/">three</a>
+              <a class="aframe" href="./splat-transitions/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./splat-transitions/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">splat-flow</td>
+            <td class="desc">Flow animation across multiple splats.</td>
+            <td class="engines">
+              <a class="three" href="./splat-flow/">three</a>
+              <a class="aframe" href="./splat-flow/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./splat-flow/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">splat-dissolve-effects</td>
+            <td class="desc">
+              Per-splat dissolve effect with hash-driven drift.
+            </td>
+            <td class="engines">
+              <a class="three" href="./splat-dissolve-effects/">three</a>
+              <a
+                class="aframe"
+                href="./splat-dissolve-effects/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./splat-dissolve-effects/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">splat-reveal-effects</td>
+            <td class="desc">
+              Per-splat reveal effects (Magic / Spread / Unroll / Twister
+              / Rain).
+            </td>
+            <td class="engines">
+              <a class="three" href="./splat-reveal-effects/">three</a>
+              <a
+                class="aframe"
+                href="./splat-reveal-effects/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./splat-reveal-effects/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">splat-shader-effects</td>
+            <td class="desc">
+              Fractal / movement shader effects on cat.spz.
+            </td>
+            <td class="engines">
+              <a class="three" href="./splat-shader-effects/">three</a>
+              <a
+                class="aframe"
+                href="./splat-shader-effects/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./splat-shader-effects/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">particle-animation</td>
+            <td class="desc">
+              Procedural cloud generator (~20K splats with octave noise).
+            </td>
+            <td class="engines">
+              <a class="three" href="./particle-animation/">three</a>
+              <a class="aframe" href="./particle-animation/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./particle-animation/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">particle-simulation</td>
+            <td class="desc">Physics-driven particle simulation.</td>
+            <td class="engines">
+              <a class="three" href="./particle-simulation/">three</a>
+              <a
+                class="aframe"
+                href="./particle-simulation/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./particle-simulation/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">lofi</td>
+            <td class="desc">Lo-fi visual effect pipeline.</td>
+            <td class="engines">
+              <a class="three" href="./lofi/">three</a>
+              <a class="aframe" href="./lofi/?engine=aframe">aframe</a>
+              <a class="babylon" href="./lofi/?engine=babylon">babylon</a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Multi-pass &amp; portals</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td class="name">multiple-viewpoints</td>
+            <td class="desc">
+              Render same scene from two viewpoints simultaneously.
+            </td>
+            <td class="engines">
+              <a class="three" href="./multiple-viewpoints/">three</a>
+              <a
+                class="aframe"
+                href="./multiple-viewpoints/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./multiple-viewpoints/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">portal</td>
+            <td class="desc">SparkPortals two-pass portal effect.</td>
+            <td class="engines">
+              <a class="three" href="./portal/">three</a>
+              <a class="aframe" href="./portal/?engine=aframe">aframe</a>
+              <a class="babylon" href="./portal/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">newportal</td>
+            <td class="desc">Reworked portal demo.</td>
+            <td class="engines">
+              <a class="three" href="./newportal/">three</a>
+              <a class="aframe" href="./newportal/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./newportal/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">splat-portal</td>
+            <td class="desc">Portal between splat scenes.</td>
+            <td class="engines">
+              <a class="three" href="./splat-portal/">three</a>
+              <a class="aframe" href="./splat-portal/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./splat-portal/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">render-cube-depth</td>
+            <td class="desc">
+              Render cube depth pass + rubber duck reflection.
+            </td>
+            <td class="engines">
+              <a class="three" href="./render-cube-depth/">three</a>
+              <a class="aframe" href="./render-cube-depth/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./render-cube-depth/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Interactive</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td class="name">interactivity</td>
+            <td class="desc">Generic interactivity helpers.</td>
+            <td class="engines">
+              <a class="three" href="./interactivity/">three</a>
+              <a class="aframe" href="./interactivity/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./interactivity/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">raycasting</td>
+            <td class="desc">
+              Click → highlight per-splat raycast on robot-head.spz.
+            </td>
+            <td class="engines">
+              <a class="three" href="./raycasting/">three</a>
+              <a class="aframe" href="./raycasting/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./raycasting/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">interactive-deform</td>
+            <td class="desc">Pointer-driven splat deform.</td>
+            <td class="engines">
+              <a class="three" href="./interactive-deform/">three</a>
+              <a class="aframe" href="./interactive-deform/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./interactive-deform/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">interactive-holes</td>
+            <td class="desc">Pointer-driven hole carving.</td>
+            <td class="engines">
+              <a class="three" href="./interactive-holes/">three</a>
+              <a class="aframe" href="./interactive-holes/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./interactive-holes/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">interactive-ripples</td>
+            <td class="desc">Pointer-driven ripple deformation.</td>
+            <td class="engines">
+              <a class="three" href="./interactive-ripples/">three</a>
+              <a
+                class="aframe"
+                href="./interactive-ripples/?engine=aframe"
+                >aframe</a
+              >
+              <a
+                class="babylon"
+                href="./interactive-ripples/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">splat-painter</td>
+            <td class="desc">Pointer-driven splat painting tool.</td>
+            <td class="engines">
+              <a class="three" href="./splat-painter/">three</a>
+              <a class="aframe" href="./splat-painter/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./splat-painter/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">mobile-joystick</td>
+            <td class="desc">Touch joystick controls.</td>
+            <td class="engines">
+              <a class="three" href="./mobile-joystick/">three</a>
+              <a class="aframe" href="./mobile-joystick/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./mobile-joystick/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">editor</td>
+            <td class="desc">Full splat editor UI.</td>
+            <td class="engines">
+              <a class="three" href="./editor/">three</a>
+              <a class="aframe" href="./editor/?engine=aframe">aframe</a>
+              <a class="babylon" href="./editor/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>XR</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td class="name">basic-xr</td>
+            <td class="desc">Minimal WebXR session entry.</td>
+            <td class="engines">
+              <a class="three" href="./basic-xr/">three</a>
+              <a class="aframe" href="./basic-xr/?engine=aframe"
+                >aframe</a
+              >
+              <a class="babylon" href="./basic-xr/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+          <tr>
+            <td class="name">webxr</td>
+            <td class="desc">Full WebXR with hand tracking.</td>
+            <td class="engines">
+              <a class="three" href="./webxr/">three</a>
+              <a class="aframe" href="./webxr/?engine=aframe">aframe</a>
+              <a class="babylon" href="./webxr/?engine=babylon"
+                >babylon</a
+              >
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Backend host references</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td class="name">spark-babylon</td>
+            <td class="desc">
+              Standalone Babylon host demo using SparkBabylonHost
+              directly.
+            </td>
+            <td class="engines">
+              <a class="babylon" href="./spark-babylon/">babylon</a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </body>
 </html>

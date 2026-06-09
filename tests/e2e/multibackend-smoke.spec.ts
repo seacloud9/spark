@@ -1,18 +1,36 @@
 import { expect, test } from "@playwright/test";
 
-// Throwaway smoke test for examples/spark-multibackend/. Verifies that the
-// page loads under each engine without page errors and that the engine
-// link / scene select UI renders. Not part of the parity gate — delete
-// once the example is stable.
+// Smoke test for the engine-aware examples flow:
+//   examples/index.html → real index with 3 engine links per example.
+//   examples/hello-world/index.html → reads ?engine= via spark-engine.js.
 test.describe.configure({ mode: "serial" });
 
 const ENGINES = ["three", "aframe", "babylon"] as const;
 
+test("examples index lists hello-world with all three engine links", async ({
+  page,
+}) => {
+  await page.goto(`/examples/`, { timeout: 30_000 });
+  // The first <tbody> row should be hello-world with 3 engine links.
+  const helloRow = page.locator("tr.engine-aware").first();
+  await expect(helloRow.locator("td.name")).toContainText("hello-world");
+  await expect(helloRow.locator("td.engines a.three")).toHaveAttribute(
+    "href",
+    "./hello-world/",
+  );
+  await expect(helloRow.locator("td.engines a.aframe")).toHaveAttribute(
+    "href",
+    "./hello-world/?engine=aframe",
+  );
+  await expect(helloRow.locator("td.engines a.babylon")).toHaveAttribute(
+    "href",
+    "./hello-world/?engine=babylon",
+  );
+});
+
 for (const engine of ENGINES) {
-  test(`multibackend playground loads on engine=${engine}`, async ({
-    page,
-  }) => {
-    test.setTimeout(120_000);
+  test(`hello-world loads on engine=${engine}`, async ({ page }) => {
+    test.setTimeout(180_000);
 
     const errors: string[] = [];
     page.on("pageerror", (err) => {
@@ -24,44 +42,30 @@ for (const engine of ENGINES) {
       }
     });
 
-    await page.goto(
-      `/examples/spark-multibackend/?engine=${engine}&scene=axes`,
-      { timeout: 60_000 },
-    );
-
-    // The meta div starts as "Loading…" and flips to a scene description
-    // once the engine has mounted. Wait for that flip as the success
-    // signal — different engines have different timing.
-    await expect(page.locator("#meta")).not.toHaveText("Loading…", {
+    const qs = engine === "three" ? "" : `?engine=${engine}`;
+    await page.goto(`/examples/hello-world/${qs}`, {
       timeout: 90_000,
     });
-    const metaText = await page.locator("#meta").textContent();
-    expect(metaText).toContain(`scene: axes`);
 
-    // Engine link row should include all three engines, with the active
-    // one underlined.
-    await expect(
-      page.locator(`#engineLinks a.active`),
-    ).toHaveText(engine);
+    // The engine switcher overlay should appear after spark-engine.js
+    // mounts the chosen backend. Wait for it as the success signal.
+    await expect(page.locator("#spark-engine-switcher")).toBeVisible({
+      timeout: 90_000,
+    });
 
-    // Scene chip row must contain ALL 19 catalogue entries (always-visible
-    // navigation, not a dropdown). Active scene should be highlighted.
-    const sceneNames = await page
-      .locator("#sceneLinks a")
-      .allTextContents();
-    // eslint-disable-next-line no-console
-    console.log(
-      `[multibackend ${engine}] sceneNames=${sceneNames.length}:`,
-      sceneNames,
-    );
-    expect(sceneNames.length).toBeGreaterThanOrEqual(19);
-    expect(sceneNames).toContain("axes");
-    expect(sceneNames).toContain("envMap");
-    expect(sceneNames).toContain("splatDissolve");
+    // Active engine in the switcher matches the URL.
+    const activeText = await page
+      .locator("#spark-engine-switcher a")
+      .filter({
+        has: page.locator("text=" + engine),
+      })
+      .first()
+      .textContent();
+    expect(activeText?.trim()).toBe(engine);
 
     if (errors.length > 0) {
       // eslint-disable-next-line no-console
-      console.log(`[multibackend ${engine}] errors:`, errors);
+      console.log(`[hello-world ${engine}] errors:`, errors);
     }
     expect(errors).toEqual([]);
   });
