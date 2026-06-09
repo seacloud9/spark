@@ -1,0 +1,91 @@
+name: Spark CI E2E (multi-backend parity gate)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: Multi-backend parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install Rust toolchain (wasm target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+            rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/**/Cargo.lock', 'rust/**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Rust → wasm
+        # build:wasm is responsible for ensuring wasm-pack is available and
+        # then running it against rust/spark-rs. Spark's worker-side splat
+        # sort depends on this artefact at runtime; the snapshot fixtures
+        # all exercise SparkRenderer.update() which routes through the
+        # wasm worker, so this step is non-optional.
+        run: pnpm run build:wasm
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Type check
+        run: pnpm exec tsc --noEmit --project tsconfig.json
+
+      - name: Node tests
+        run: pnpm run test
+
+      - name: Install Playwright chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Playwright (parity gate)
+        run: pnpm exec playwright test
+
+      - name: Upload parity artefacts
+        # Always upload so reviewers can download the per-backend PNGs
+        # and the diff overlays for any run — passing or failing.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-renders-${{ github.run_id }}
+          path: |
+            tmp/
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
