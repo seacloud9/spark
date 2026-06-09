@@ -104,13 +104,13 @@ for (const scene of SCENES) {
   test.describe(`scene: ${scene}`, () => {
     test(`captures three-${scene}.png`, async ({ page }) => {
       if (NETWORK_SCENES.has(scene)) {
-        test.setTimeout(240_000);
+        test.setTimeout(360_000);
       }
       await page.goto(`/tests/fixtures/snapshot-three.html?scene=${scene}`, {
-        timeout: NETWORK_SCENES.has(scene) ? 120_000 : 30_000,
+        timeout: NETWORK_SCENES.has(scene) ? 180_000 : 30_000,
       });
       await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
-        timeout: NETWORK_SCENES.has(scene) ? 180_000 : 60_000,
+        timeout: NETWORK_SCENES.has(scene) ? 240_000 : 60_000,
       });
       await page
         .locator("#view")
@@ -131,13 +131,13 @@ for (const scene of SCENES) {
 
     test(`captures aframe-${scene}.png`, async ({ page }) => {
       if (NETWORK_SCENES.has(scene)) {
-        test.setTimeout(240_000);
+        test.setTimeout(360_000);
       }
       await page.goto(`/tests/fixtures/snapshot-aframe.html?scene=${scene}`, {
-        timeout: NETWORK_SCENES.has(scene) ? 120_000 : 30_000,
+        timeout: NETWORK_SCENES.has(scene) ? 180_000 : 30_000,
       });
       await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
-        timeout: NETWORK_SCENES.has(scene) ? 180_000 : 60_000,
+        timeout: NETWORK_SCENES.has(scene) ? 240_000 : 60_000,
       });
       await page
         .locator("#view")

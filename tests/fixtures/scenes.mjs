@@ -31,13 +31,35 @@ const ASSET_BASE = "https://sparkjs.dev/assets";
 // repo-local file instead of the sparkjs.dev CDN, which removes
 // network latency and CDN flakiness from the parity gate for the
 // most-used assets. Add files here as Phase F lands them.
-const VENDORED_ASSETS = new Set(["butterfly.spz"]);
+const VENDORED_ASSETS = new Set([
+  "butterfly.spz",
+  "butterfly-ai.spz",
+  "cat.spz",
+  "fly.spz",
+  "distant-igloo.spz",
+  "fireplace.spz",
+  "valley.spz",
+  // sutro.zip is 26 MB and the vite dev server hangs serving it for
+  // long enough that the SOGS decode never completes inside the
+  // network-scene timeout budget. Vendor it via a separate static
+  // path in a follow-up commit (likely git LFS once the vendored
+  // directory grows past ~100 MB).
+]);
+
+const VENDORED_MODELS = new Set(["rubberduck.glb"]);
 
 function splatUrl(filename) {
   if (VENDORED_ASSETS.has(filename)) {
     return `/tests/fixtures/assets/${filename}`;
   }
   return `${ASSET_BASE}/splats/${filename}`;
+}
+
+function modelUrl(filename) {
+  if (VENDORED_MODELS.has(filename)) {
+    return `/tests/fixtures/assets/models/${filename}`;
+  }
+  return `${ASSET_BASE}/models/${filename}`;
 }
 
 async function buildUrlSplat({ url, position, quaternion, scale }) {
@@ -73,7 +95,7 @@ async function buildEnvMap() {
     "/node_modules/three/examples/jsm/loaders/GLTFLoader.js"
   );
 
-  const url = `${ASSET_BASE}/splats/fireplace.spz`;
+  const url = `${splatUrl("fireplace.spz")}`;
   const background = new SplatMesh({ url });
   background.quaternion.set(1, 0, 0, 0);
   background.position.set(0.5, 0, -1);
@@ -88,7 +110,7 @@ async function buildEnvMap() {
   await Promise.all([background.initialized, background2.initialized]);
 
   const gltf = await new GLTFLoader().loadAsync(
-    `${ASSET_BASE}/models/rubberduck.glb`,
+    `${modelUrl("rubberduck.glb")}`,
   );
   const duck = gltf.scene;
   duck.position.set(0, 0.45, -0.4);
@@ -132,7 +154,7 @@ async function buildDynamicLighting() {
   // before any sin() flicker). Tests SplatEdit + SplatEditSdf parity
   // across backends.
   const fireplace = new SplatMesh({
-    url: `${ASSET_BASE}/splats/fireplace.spz`,
+    url: `${splatUrl("fireplace.spz")}`,
   });
   fireplace.quaternion.set(1, 0, 0, 0);
   fireplace.position.set(0, -1, -10);
@@ -256,7 +278,7 @@ async function buildSplatDissolve() {
   // a setAnimationLoop wall clock; the parity scene pins animateT to
   // a deterministic 5.0 so the captured frame is reproducible. Mid-
   // dissolve frame shows the partial drift / fade effect.
-  const fly = new SplatMesh({ url: `${ASSET_BASE}/splats/fly.spz` });
+  const fly = new SplatMesh({ url: `${splatUrl("fly.spz")}` });
   fly.quaternion.set(1, 0, 0, 0);
   fly.position.set(0, 0, -0.5);
 
@@ -429,7 +451,7 @@ async function buildNonLod() {
     return splats;
   }
 
-  const url = `${ASSET_BASE}/splats/butterfly-ai.spz`;
+  const url = `${splatUrl("butterfly-ai.spz")}`;
   const left = makeButterfly(url, [-1, 0, -1.5]);
   const middle = makeButterfly(url, [0, 0, -1.5]);
   const right = makeButterfly(url, [1, 0, -1.5]);
@@ -458,7 +480,7 @@ async function buildExtSplats() {
   // produces visible quantization on the non-extSplats copy. The
   // example bobs the group in y over time; we capture at the static
   // group.position = (0, 0, 1000) (sin(0) = 0).
-  const url = `${ASSET_BASE}/splats/distant-igloo.spz`;
+  const url = `${splatUrl("distant-igloo.spz")}`;
 
   const standard = new SplatMesh({ url, extSplats: false });
   standard.position.set(0, -1.5, 0);
@@ -492,7 +514,7 @@ async function buildDebugColor() {
   butterfly.position.set(-0.5, 0, -1.5);
 
   const butterfly2 = new SplatMesh({
-    url: `${ASSET_BASE}/splats/butterfly-ai.spz`,
+    url: `${splatUrl("butterfly-ai.spz")}`,
   });
   butterfly2.quaternion.set(1, 0, 0, 0);
   butterfly2.position.set(0.5, 0, -1.5);
@@ -517,12 +539,12 @@ async function buildMultipleSplats() {
   // across two URL-loaded SplatMesh instances with different scales and
   // quaternions.
   const butterfly = new SplatMesh({
-    url: `${ASSET_BASE}/splats/butterfly-ai.spz`,
+    url: `${splatUrl("butterfly-ai.spz")}`,
   });
   butterfly.quaternion.set(1, 0, 0, 0);
   butterfly.position.set(-1.0, 0.6, 0);
 
-  const cat = new SplatMesh({ url: `${ASSET_BASE}/splats/cat.spz` });
+  const cat = new SplatMesh({ url: `${splatUrl("cat.spz")}` });
   cat.quaternion.set(1, 0, 0, 0);
   cat.scale.setScalar(0.5);
   cat.position.set(0.6, -0.4, 0);
@@ -805,7 +827,7 @@ export const SCENES = {
     },
     build: () =>
       buildUrlSplat({
-        url: `${ASSET_BASE}/splats/valley.spz`,
+        url: `${splatUrl("valley.spz")}`,
         position: [0, 0, -5],
         quaternion: [1, 0, 0, 0],
         scale: 0.5,
@@ -829,7 +851,7 @@ export const SCENES = {
     clearColor: 0x202830,
     build: () =>
       buildUrlSplat({
-        url: `${ASSET_BASE}/splats/sutro.zip`,
+        url: `${splatUrl("sutro.zip")}`,
         quaternion: [1, 0, 0, 0],
       }),
   },

@@ -174,11 +174,23 @@ After Phase D unblocks multi-camera / multi-pass:
 
 Exit: matrix has ~36 scenes. AGENTS.md "Backend Visual Parity Goal" lists the 4 non-gatable XR/editor exceptions explicitly.
 
-### Phase F — Asset vendoring + CI hardening (≈ 3–5 commits, 1 session)
+### Phase F — Asset vendoring + CI hardening (in flight, 8/9 assets vendored)
 
-Today the parity gate depends on sparkjs.dev being reachable from CI. Vendor a small subset of the test-critical `.spz` files into `tests/fixtures/assets/` so the gate is offline-stable; switch network scenes to local URL by default, keep CDN as fallback. Add CI cache for the vendored assets.
+Today's parity matrix loads 9 distinct assets — 8 `.spz` / `.zip` and 1 `.glb`. As of `c78cbca` + the Phase F batch commit, 8 of 9 are vendored under `tests/fixtures/assets/` (and `tests/fixtures/assets/models/`).
 
-Exit: CI runs without network dependency. Per-scene timeouts shrink back toward the procedural-scene budget.
+The one exclusion is `sutro.zip` (26 MB SOGS package). vite's dev-server static-file pipeline does not return it inside the network-scene `data-ready` timeout budget; the page hangs on fetch with no progress logs. The `sogs` scene falls through `splatUrl`'s CDN fallback. Vendoring sutro.zip needs either a separate static-asset server or git LFS — tracked as Phase F follow-up work.
+
+`scenes.mjs` carries two helpers:
+- `splatUrl(filename)`: returns `/tests/fixtures/assets/<filename>` if the filename is in `VENDORED_ASSETS`, otherwise `${ASSET_BASE}/splats/<filename>`.
+- `modelUrl(filename)`: same shape for `/models/<filename>`.
+
+Adding a new scene with a new asset is a two-step process: (1) drop the file into `tests/fixtures/assets/` (or `models/`), (2) add the filename to the appropriate Set. No fixture change required.
+
+Total disk footprint: ~57 MB in the working tree. Heavy but acceptable for plain git; if it crosses ~100 MB or starts hurting clone time a follow-up commit can switch the directory to git LFS.
+
+Remaining for Phase F:
+- Tighten the Babylon network-scene timeout budget. Current limit (test 540s, goto 240s, data-ready 360s) was sized for cold-cache CDN fetches; with vendored assets every scene completes well inside that envelope. Shrink to roughly the procedural-scene budget once CI has run cleanly on vendored assets a few times.
+- Add a `git lfs` migration step if the vendored directory grows past ~100 MB.
 
 ## Realistic effort summary
 
