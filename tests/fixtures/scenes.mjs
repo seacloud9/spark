@@ -12,10 +12,10 @@
 
 import * as THREE from "three";
 import {
+  SplatMesh,
   constructAxes,
   constructGrid,
   constructSpherePoints,
-  SplatMesh,
 } from "/src/index.ts";
 
 async function buildTinted() {
