@@ -187,6 +187,54 @@ async function buildDynamicLighting() {
   return { root: group, splatCount: fireplace.numSplats };
 }
 
+async function buildAnimatedWarp() {
+  // Mirrors the animated portion of examples/glsl: butterfly.spz with a
+  // dyno worldModifier that warps each splat's centre by warpRadial.
+  // The example drives the warp via `animateT.value = time / 1000` in
+  // the animation loop; we set animateT to a deterministic 1.5 here so
+  // the captured frame is reproducible. Tests that dyno-uniform-driven
+  // animation is bit-perfect across backends at a fixed time.
+  const mesh = new SplatMesh({ url: `${ASSET_BASE}/splats/butterfly.spz` });
+  mesh.quaternion.set(1, 0, 0, 0);
+  mesh.position.set(0, 0, -1.5);
+
+  const animateT = dyno.dynoFloat(1.5);
+
+  mesh.objectModifier = dyno.dynoBlock(
+    { gsplat: dyno.Gsplat },
+    { gsplat: dyno.Gsplat },
+    ({ gsplat }) => {
+      const d = new dyno.Dyno({
+        inTypes: { gsplat: dyno.Gsplat, t: "float" },
+        outTypes: { gsplat: dyno.Gsplat },
+        globals: () => [
+          dyno.unindent(`
+            float warpRadial(float r, float t) {
+              return r * (1.0 + 0.1 * sin(r * 15.0 + t * 3.0));
+            }
+            vec3 warp(vec3 pos, float t) {
+              float r = length(pos);
+              float newR = warpRadial(r, t);
+              return pos * (newR / r);
+            }
+          `),
+        ],
+        statements: ({ inputs, outputs }) =>
+          dyno.unindentLines(`
+            ${outputs.gsplat} = ${inputs.gsplat};
+            ${outputs.gsplat}.center = warp(${inputs.gsplat}.center, ${inputs.t});
+          `),
+      });
+      const next = d.apply({ gsplat, t: animateT }).gsplat;
+      return { gsplat: next };
+    },
+  );
+  mesh.updateGenerator();
+
+  await mesh.initialized;
+  return { root: mesh, splatCount: mesh.numSplats };
+}
+
 async function buildGlsl() {
   // Mirrors the static portion of examples/glsl: butterfly.spz with a
   // worldModifier that injects raw GLSL into the Spark shader. The
@@ -731,6 +779,24 @@ export const SCENES = {
     },
     clearColor: 0x000000,
     build: buildDynamicLighting,
+  },
+  animatedWarp: {
+    // Mirrors the animated portion of examples/glsl with a fixed
+    // animateT = 1.5. Also sets sceneCfg.time so SparkRenderer's
+    // internal time uniform is deterministic for any downstream code
+    // path that reads it (DoF jitter, sort fade-in, etc.). First scene
+    // in the matrix that exercises Phase B's fixed-time fixture
+    // plumbing.
+    camera: {
+      position: [0, 0, 0],
+      lookAt: [0, 0, -1],
+      fov: 60,
+      near: 0.1,
+      far: 1000,
+    },
+    clearColor: 0x000000,
+    time: 1.5,
+    build: buildAnimatedWarp,
   },
   envMap: {
     // Mirrors examples/envmap: fireplace.spz mirrored backgrounds with

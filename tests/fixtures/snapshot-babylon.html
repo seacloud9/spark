@@ -85,6 +85,9 @@
           renderer: host.threeRenderer,
         });
       }
+      if (typeof sceneCfg.time === "number") {
+        host.sparkRenderer.time = sceneCfg.time;
+      }
 
       await scene.whenReadyAsync();
 

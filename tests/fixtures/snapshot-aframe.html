@@ -108,6 +108,9 @@
       if (typeof built.postInit === "function") {
         await built.postInit({ spark, scene, camera, renderer });
       }
+      if (typeof sceneCfg.time === "number") {
+        spark.time = sceneCfg.time;
+      }
       await spark.update({ scene, camera });
       renderer.render(scene, camera);
       await new Promise((resolve) => requestAnimationFrame(resolve));
