@@ -12,10 +12,15 @@
 
 import * as THREE from "three";
 import {
+  SplatEdit,
+  SplatEditRgbaBlendMode,
+  SplatEditSdf,
+  SplatEditSdfType,
   SplatMesh,
   constructAxes,
   constructGrid,
   constructSpherePoints,
+  dyno,
   modifiers,
 } from "/src/index.ts";
 
@@ -39,6 +44,177 @@ async function buildUrlSplat({ url, position, quaternion, scale }) {
   }
   await mesh.initialized;
   return { root: mesh, splatCount: mesh.numSplats };
+}
+
+async function buildDynamicLighting() {
+  // Mirrors the static initial-frame portion of examples/dynamic-lighting:
+  // fireplace.spz with three SDF-based light overlays composed through
+  // SplatEdit + SplatEditSdf at three different blend modes. The
+  // example animates the camera and flickers the light colours over
+  // time; we capture the initial frame (camera at z=-2.5, base colours
+  // before any sin() flicker). Tests SplatEdit + SplatEditSdf parity
+  // across backends.
+  const fireplace = new SplatMesh({
+    url: `${ASSET_BASE}/splats/fireplace.spz`,
+  });
+  fireplace.quaternion.set(1, 0, 0, 0);
+  fireplace.position.set(0, -1, -10);
+
+  const emberLayer = new SplatEdit({
+    rgbaBlendMode: SplatEditRgbaBlendMode.ADD_RGBA,
+    sdfSmooth: 0.1,
+    softEdge: 0.8,
+  });
+
+  const lightingLayer = new SplatEdit({
+    rgbaBlendMode: SplatEditRgbaBlendMode.ADD_RGBA,
+    sdfSmooth: 0.1,
+    softEdge: 1.4,
+  });
+
+  const ambientLayer = new SplatEdit({
+    rgbaBlendMode: SplatEditRgbaBlendMode.DARKEN,
+    sdfSmooth: 0.1,
+    softEdge: 0.05,
+  });
+
+  function makeLight(layer, position, color, radius, opacity) {
+    const light = new SplatEditSdf({
+      type: SplatEditSdfType.SPHERE,
+      color,
+      radius,
+      opacity,
+    });
+    light.position.copy(position);
+    layer.add(light);
+  }
+
+  // Embers at the base of the fire.
+  makeLight(
+    emberLayer,
+    new THREE.Vector3(0.5, -1.0, -10.5),
+    new THREE.Color(1, 0.6, 0.4),
+    0.75,
+    1,
+  );
+  // Main fire light.
+  makeLight(
+    lightingLayer,
+    new THREE.Vector3(0.3, -1.1, -10.6),
+    new THREE.Color(1, 0.95, 0.2),
+    1.6,
+    0,
+  );
+  // Ambient room light.
+  makeLight(
+    ambientLayer,
+    new THREE.Vector3(0, 1, -11),
+    new THREE.Color(1, 0.8, 0.6),
+    6,
+    0.8,
+  );
+
+  await fireplace.initialized;
+
+  const group = new THREE.Group();
+  group.add(fireplace);
+  group.add(emberLayer);
+  group.add(lightingLayer);
+  group.add(ambientLayer);
+  return { root: group, splatCount: fireplace.numSplats };
+}
+
+async function buildGlsl() {
+  // Mirrors the static portion of examples/glsl: butterfly.spz with a
+  // worldModifier that injects raw GLSL into the Spark shader. The
+  // waveRgb function tints each splat's RGB by sin/cos of its world-
+  // space centre. The example also wires a time-driven animateT to a
+  // separate DynoBlock for animated motion; we drop that here because
+  // parity is measured at a single static frame. Tests the dyno raw-
+  // GLSL injection path (dyno.Dyno with globals + statements) across
+  // backends.
+  const mesh = new SplatMesh({ url: `${ASSET_BASE}/splats/butterfly.spz` });
+  mesh.quaternion.set(1, 0, 0, 0);
+  mesh.position.set(0, 0, -1.5);
+
+  mesh.worldModifier = new dyno.Dyno({
+    inTypes: { gsplat: dyno.Gsplat },
+    outTypes: { gsplat: dyno.Gsplat },
+    globals: () => [
+      dyno.unindent(`
+        vec3 waveRgb(vec3 pos) {
+          return vec3(
+            0.6 + 0.4 * sin(pos.x * 56.0),
+            0.6 + 0.4 * sin(pos.y * 78.0),
+            0.6 + 0.4 * cos(pos.z * 90.0)
+          );
+        }
+      `),
+    ],
+    statements: ({ inputs, outputs }) =>
+      dyno.unindentLines(`
+        ${outputs.gsplat} = ${inputs.gsplat};
+        ${outputs.gsplat}.rgba.rgb *= waveRgb(${inputs.gsplat}.center);
+      `),
+  });
+
+  await mesh.initialized;
+  return { root: mesh, splatCount: mesh.numSplats };
+}
+
+async function buildNonLod() {
+  // Mirrors examples/nonlod: butterfly-ai.spz loaded three times side by
+  // side, each with a dyno shader-graph objectModifier that multiplies
+  // per-splat RGB by debugColorHue(index >> 12). The result is a per-
+  // splat-index hue overlay on each butterfly. This is the first scene
+  // in the matrix that exercises the dyno (shader-graph) modifier
+  // pipeline — distinct from the simpler modifiers namespace path
+  // covered by debugColor.
+  const splatColoring = dyno.dynoBool(true);
+
+  function makeSplatIndexColoring() {
+    return dyno.dynoBlock(
+      { gsplat: dyno.Gsplat },
+      { gsplat: dyno.Gsplat },
+      ({ gsplat }) => {
+        let { index, rgb } = dyno.splitGsplat(gsplat).outputs;
+        const debugRgb = dyno.debugColorHue(
+          dyno.shr(index, dyno.dynoConst("int", 12)),
+        );
+        rgb = dyno.select(splatColoring, dyno.mul(debugRgb, rgb), rgb);
+        return { gsplat: dyno.combineGsplat({ gsplat, rgb }) };
+      },
+    );
+  }
+
+  function makeButterfly(url, position) {
+    const splats = new SplatMesh({ url });
+    splats.objectModifiers = [makeSplatIndexColoring()];
+    splats.updateGenerator();
+    splats.quaternion.set(1, 0, 0, 0);
+    splats.position.set(position[0], position[1], position[2]);
+    return splats;
+  }
+
+  const url = `${ASSET_BASE}/splats/butterfly-ai.spz`;
+  const left = makeButterfly(url, [-1, 0, -1.5]);
+  const middle = makeButterfly(url, [0, 0, -1.5]);
+  const right = makeButterfly(url, [1, 0, -1.5]);
+
+  await Promise.all([
+    left.initialized,
+    middle.initialized,
+    right.initialized,
+  ]);
+
+  const group = new THREE.Group();
+  group.add(left);
+  group.add(middle);
+  group.add(right);
+  return {
+    root: group,
+    splatCount: left.numSplats + middle.numSplats + right.numSplats,
+  };
 }
 
 async function buildExtSplats() {
@@ -442,6 +618,56 @@ export const SCENES = {
     },
     clearColor: 0x080a14,
     build: buildExtSplats,
+  },
+  nonLod: {
+    // Mirrors examples/nonlod: three butterfly-ai.spz instances with a
+    // dyno objectModifier that mixes a per-splat-index hue ramp into
+    // the per-splat colour. lodSplatCount is capped at 100K matching
+    // the example so individual splats are visible. First scene in
+    // the matrix to exercise the dyno shader-graph modifier path.
+    camera: {
+      position: [0, 0, 0],
+      lookAt: [0, 0, -1],
+      fov: 75,
+      near: 0.01,
+      far: 1000,
+    },
+    clearColor: 0x101218,
+    sparkOverrides: { lodSplatCount: 100000 },
+    build: buildNonLod,
+  },
+  glsl: {
+    // Mirrors the static portion of examples/glsl: butterfly.spz with
+    // a worldModifier dyno.Dyno that injects raw GLSL (waveRgb tint
+    // based on world-space splat centre). First scene in the matrix
+    // to exercise dyno.Dyno + dyno.unindent / unindentLines for raw-
+    // GLSL injection.
+    camera: {
+      position: [0, 0, 0],
+      lookAt: [0, 0, -1],
+      fov: 60,
+      near: 0.1,
+      far: 1000,
+    },
+    clearColor: 0x000000,
+    build: buildGlsl,
+  },
+  dynamicLighting: {
+    // Mirrors the initial-frame portion of examples/dynamic-lighting:
+    // fireplace.spz lit by three SDF sphere lights in two ADD_RGBA
+    // SplatEdit layers + one DARKEN layer. First scene in the matrix
+    // to exercise the SplatEdit / SplatEditSdf pipeline. Camera at
+    // (0, 0, -2.5) matches the example's initial position before the
+    // animation loop's sin() camera bob.
+    camera: {
+      position: [0, 0, -2.5],
+      lookAt: [0, 0, -10],
+      fov: 60,
+      near: 0.1,
+      far: 100,
+    },
+    clearColor: 0x000000,
+    build: buildDynamicLighting,
   },
 };
 
