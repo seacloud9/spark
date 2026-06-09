@@ -112,3 +112,24 @@ export {
   type PortalPair,
   DISK_PORTAL_FRAGMENT_SHADER,
 } from "./SparkPortals";
+
+// Multi-backend support (see src/backends/README.md).
+// Three is Spark's native render host; A-Frame and Babylon are integration
+// adapters that let Spark splats render inside scenes hosted by those
+// engines. See docs/multi-backend.md and tmp/README.md for the parity story.
+export type {
+  SparkBackendKind,
+  SparkBackendCapabilities,
+  SparkFrameContext,
+  SparkHostSceneAdapter,
+  SparkGlesConformanceReport,
+  SparkPngStillCapture,
+} from "./backends/types";
+export {
+  ThreeHostSceneAdapter,
+  type ThreeHostSceneAdapterOptions,
+  fillThreeDrawingBufferSize,
+  getThreeRenderCamera,
+} from "./backends/three/ThreeHostSceneAdapter";
+export * as aframe from "./backends/aframe/SparkAFrameIntegration";
+export * as babylon from "./backends/babylon/SparkBabylonHost";
