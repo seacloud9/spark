@@ -240,11 +240,22 @@ export async function setupSparkExample(opts = {}) {
   else if (engine === "aframe") env = await setupAframeBackend(opts);
   else env = await setupThreeBackend(opts);
 
-  // Floating engine switcher in the bottom-right so every example
-  // gets the same nav without each one wiring it manually.
+  // Persistent bottom-edge engine footer so every example exposes the
+  // three engine URLs + a back-to-examples link without each example
+  // wiring it manually.
   mountEngineSwitcher(engine);
 
   return env;
+}
+
+function getExampleName() {
+  // examples/<name>/[index.html] → <name>; fall back to "example" on
+  // unfamiliar paths (root, custom layouts).
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  const idx = parts.lastIndexOf("examples");
+  if (idx >= 0 && parts[idx + 1]) return parts[idx + 1];
+  if (parts.length) return parts[parts.length - 1].replace(/\.html?$/i, "");
+  return "example";
 }
 
 const ENGINE_TITLES = {
@@ -264,25 +275,44 @@ const ENGINE_LABELS = {
 
 function mountEngineSwitcher(active) {
   if (document.getElementById("spark-engine-switcher")) return;
-  const wrap = document.createElement("div");
-  wrap.id = "spark-engine-switcher";
-  wrap.style.cssText = [
+  const footer = document.createElement("footer");
+  footer.id = "spark-engine-switcher";
+  footer.style.cssText = [
     "position:fixed",
-    "right:12px",
-    "bottom:12px",
+    "left:0",
+    "right:0",
+    "bottom:0",
     "z-index:9999",
-    "background:rgba(0,0,0,0.6)",
+    "background:rgba(0,0,0,0.72)",
     "color:#fff",
-    "padding:6px 10px",
-    "border-radius:6px",
+    "padding:8px 14px",
     "font-family:system-ui,sans-serif",
     "font-size:12px",
     "display:flex",
-    "gap:6px",
+    "gap:14px",
     "align-items:center",
-    "max-width:380px",
+    "flex-wrap:wrap",
+    "border-top:1px solid rgba(255,255,255,0.08)",
+    "backdrop-filter:blur(4px)",
   ].join(";");
-  wrap.innerHTML = `<span style="opacity:0.7">engine:</span>`;
+
+  const back = document.createElement("a");
+  back.href = "../";
+  back.textContent = "← examples";
+  back.style.cssText =
+    "color:#9fd0ff;text-decoration:none;font-weight:500";
+  footer.appendChild(back);
+
+  const name = document.createElement("span");
+  name.textContent = getExampleName();
+  name.style.cssText = "opacity:0.7";
+  footer.appendChild(name);
+
+  const sep = document.createElement("span");
+  sep.style.cssText = "opacity:0.35;margin-left:auto";
+  sep.textContent = "engine:";
+  footer.appendChild(sep);
+
   for (const e of ["three", "aframe", "babylon"]) {
     const a = document.createElement("a");
     const params = new URLSearchParams(window.location.search);
@@ -292,23 +322,30 @@ function mountEngineSwitcher(active) {
     a.href = qs ? `?${qs}` : window.location.pathname;
     a.textContent = ENGINE_LABELS[e];
     a.title = ENGINE_TITLES[e];
+    a.className = `spark-engine-link spark-engine-link-${e}`;
     a.style.cssText = [
-      "color:" + (e === active ? "#fff" : "#6abff6"),
+      "color:" + (e === active ? "#fff" : "#9fd0ff"),
       "text-decoration:" + (e === active ? "underline" : "none"),
       "font-weight:" + (e === active ? "600" : "400"),
+      "padding:2px 8px",
+      "border-radius:4px",
+      "background:" + (e === active ? "rgba(255,255,255,0.08)" : "transparent"),
     ].join(";");
-    wrap.appendChild(a);
+    footer.appendChild(a);
   }
+
   // Hint for the active engine — clarifies the integration story without
   // burying it inside a hover tooltip on a small chip.
   const hint = document.createElement("span");
-  hint.style.cssText = "opacity:0.7;font-style:italic;margin-left:6px";
+  hint.style.cssText = "opacity:0.7;font-style:italic";
   const hints = {
     three: "native host",
-    aframe: "registerSparkAFrame · structural mock (real A-Frame bundles a different Three)",
+    aframe:
+      "registerSparkAFrame · structural mock (real A-Frame bundles a different Three)",
     babylon: "SparkBabylonHost · texture bridge",
   };
   hint.textContent = "— " + hints[active];
-  wrap.appendChild(hint);
-  document.body.appendChild(wrap);
+  footer.appendChild(hint);
+
+  document.body.appendChild(footer);
 }
