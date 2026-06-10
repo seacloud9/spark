@@ -8,6 +8,11 @@ import type {
 import * as THREE from "three";
 import { SparkRenderer, type SparkRendererOptions } from "../../SparkRenderer";
 
+export {
+  registerSparkBabylonShaderChunks,
+  type BabylonShaderChunkHost,
+} from "./SparkBabylonShaderChunks";
+
 /**
  * The Babylon entry points we need at runtime. Consumers pass these in
  * (typically by importing from "@babylonjs/core" themselves) so this file
@@ -171,7 +176,8 @@ export class SparkBabylonHost {
     });
     this.threeRenderer.render(this.threeScene, this.threeCamera);
 
-    const gl = this.threeRenderer.getContext();
+    const gl = this.threeRenderer.getContext() as WebGL2RenderingContext;
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
     gl.readPixels(
       0,
       0,
