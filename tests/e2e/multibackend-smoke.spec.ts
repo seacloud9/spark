@@ -20,6 +20,7 @@ const ENGINE_AWARE_EXAMPLES = [
   "lod",
   "lod-on-demand",
   "multi-lod",
+  "sogs",
 ];
 
 test("examples index shows engine-aware bullet for every ported example", async ({

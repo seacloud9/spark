@@ -9,6 +9,9 @@
     body {
       margin: 0;
     }
+    canvas {
+      touch-action: none;
+    }
   </style>
 </head>
 
@@ -18,59 +21,49 @@
       "imports": {
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
-        "@sparkjsdev/spark": "../../dist/spark.module.js"
+        "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm"
       }
     }
   </script>
   <script type="module">
     import * as THREE from "three";
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { Sky } from 'three/addons/objects/Sky.js';
-    import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { Sky } from "three/addons/objects/Sky.js";
+    import { SplatMesh } from "@sparkjsdev/spark";
     import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 1000);
-    camera.position.set(0, 1.5, -1.2);
-
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
-
-    document.body.appendChild(renderer.domElement);
-
-    window.addEventListener('resize', onWindowResize, false);
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    const env = await setupSparkExample({
+      cameraConfig: { fov: 60, near: 0.01, position: [0, 1.5, -1.2], lookAt: [0, 1.5, 0] },
+    });
 
     const splatURL = await getAssetFileURL("sutro.zip");
     const sutroTower = new SplatMesh({ url: splatURL });
     sutroTower.quaternion.set(1, 0, 0, 0);
-    scene.add(sutroTower);
+    env.add(sutroTower);
 
+    // Three.js Sky helper is added to the same scene Spark renders, so under
+    // aframe (structural mock against the same Three triple) and babylon
+    // (texture-bridge — Spark's internal Three renders the splats + sky, then
+    // Babylon composites the result as a Layer) the sky shows up on all three
+    // backends without per-engine branching.
     const sky = new Sky();
     sky.scale.setScalar(450000);
     const phi = THREE.MathUtils.degToRad(20);
     const theta = THREE.MathUtils.degToRad(90);
     const sunPosition = new THREE.Vector3().setFromSphericalCoords(1, phi, theta);
     sky.material.uniforms.sunPosition.value = sunPosition;
-    scene.add( sky );
+    env.add(sky);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls(env.camera, env.renderer.domElement);
     controls.target.set(0, 1.5, 0);
     controls.minDistance = 0.2;
     controls.maxDistance = 8.0;
     controls.enablePan = false;
 
-    renderer.setAnimationLoop(function animate(time) {
-      controls.update(camera);
-      renderer.render(scene, camera);
+    env.run(() => {
+      controls.update();
     });
   </script>
 </body>
