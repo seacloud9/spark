@@ -70,7 +70,16 @@
       engine.setSize(1024, 768);
 
       const scene = new Scene(engine);
-      scene.clearColor = new Color4(0, 0, 0, 1);
+      // Texture-mode hides Babylon's clearColor under the opaque Layer
+      // composite, so the previous hard-coded black background didn't
+      // affect parity. Native mode draws splats directly into Babylon's
+      // framebuffer over scene.clearColor, so we need to mirror Spark's
+      // per-scene clearColor onto Babylon's clear too. Keep this for
+      // both modes — texture mode is unaffected.
+      const sceneClearR = ((sceneCfg.clearColor >> 16) & 0xff) / 255;
+      const sceneClearG = ((sceneCfg.clearColor >> 8) & 0xff) / 255;
+      const sceneClearB = (sceneCfg.clearColor & 0xff) / 255;
+      scene.clearColor = new Color4(sceneClearR, sceneClearG, sceneClearB, 1);
       scene.autoClear = true;
       // Babylon refuses to render a scene without an active camera. In
       // texture mode the splat image comes from a background Layer so a

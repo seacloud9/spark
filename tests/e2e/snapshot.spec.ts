@@ -77,6 +77,9 @@ const NATIVE_BABYLON_SCENES = new Set<SceneName>([
   "tinted",
   "helloWorld",
   "multipleSplats",
+  "debugColor",
+  "viewer",
+  "depthOfField",
 ]);
 
 async function diffParityPng(opts: {
