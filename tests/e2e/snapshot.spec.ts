@@ -32,6 +32,7 @@ const SCENES = [
   "splatReveal",
   "animatedWarp",
   "envMap",
+  "raycasting",
 ] as const;
 type SceneName = (typeof SCENES)[number];
 
@@ -54,6 +55,7 @@ const NETWORK_SCENES = new Set<SceneName>([
   "splatReveal",
   "animatedWarp",
   "envMap",
+  "raycasting",
 ]);
 
 interface BackendSnapshotMeta {
@@ -88,6 +90,7 @@ const NATIVE_BABYLON_SCENES = new Set<SceneName>([
   "splatDissolve",
   "splatReveal",
   "sogs",
+  "raycasting",
   // envMap deliberately excluded — the scene loads a rubberduck.glb
   // through Three's GLTFLoader and parents it under the SparkRenderer's
   // Three scene. In texture mode, SparkBabylonHost renders that whole

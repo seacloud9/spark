@@ -990,6 +990,37 @@ export const SCENES = {
     clearColor: 0x1b2037,
     build: buildEnvMap,
   },
+  raycasting: {
+    // Mirrors the static initial-frame of examples/raycasting/ — five
+    // robot-head.spz instances at z=0..4 with rotation.x = PI (flip so
+    // the head faces the camera) and a small scale. The example's
+    // interactive part (click → highlight) does not fire during the
+    // snapshot, so the captured frame is parity-able across backends.
+    // First Tier 7 scene to land in the matrix.
+    camera: {
+      position: [0, -0.25, -1.5],
+      lookAt: [0, -0.15, 0],
+      fov: 50,
+      near: 0.1,
+      far: 10,
+    },
+    clearColor: 0x000000,
+    build: async () => {
+      const url = splatUrl("robot-head.spz");
+      const root = new THREE.Group();
+      let splatCount = 0;
+      for (let i = 0; i < 5; i++) {
+        const robot = new SplatMesh({ url });
+        robot.rotation.x = Math.PI;
+        robot.scale.setScalar(0.2);
+        robot.position.set(0, 0, i);
+        await robot.initialized;
+        root.add(robot);
+        splatCount += robot.numSplats;
+      }
+      return { root, splatCount };
+    },
+  },
 };
 
 export function getSceneName() {
