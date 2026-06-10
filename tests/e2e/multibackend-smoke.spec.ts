@@ -21,6 +21,8 @@ const ENGINE_AWARE_EXAMPLES = [
   "lod-on-demand",
   "multi-lod",
   "sogs",
+  "streaming-lod",
+  "splat-transitions",
 ];
 
 test("examples index shows engine-aware bullet for every ported example", async ({
@@ -69,6 +71,22 @@ for (const name of ENGINE_AWARE_EXAMPLES) {
       await expect(page.locator("#spark-engine-switcher")).toBeVisible({
         timeout: 120_000,
       });
+
+      // Footer must offer all three engine links + a back-to-examples
+      // link on every page, with the correct hrefs regardless of which
+      // engine is currently active. Catches any future regression where
+      // the helper accidentally hides a link or breaks href construction.
+      const footer = page.locator("#spark-engine-switcher");
+      await expect(footer.locator("a[href='../']")).toHaveCount(1);
+      await expect(
+        footer.locator("a.spark-engine-link-three"),
+      ).toHaveAttribute("href", `/examples/${name}/`);
+      await expect(
+        footer.locator("a.spark-engine-link-aframe"),
+      ).toHaveAttribute("href", "?engine=aframe");
+      await expect(
+        footer.locator("a.spark-engine-link-babylon"),
+      ).toHaveAttribute("href", "?engine=babylon");
 
       if (errors.length > 0) {
         // eslint-disable-next-line no-console

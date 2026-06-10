@@ -17,8 +17,9 @@
     .overlay {
       position: fixed;
       margin: 12px;
-      bottom: 0;
+      top: 0;
       color: white;
+      z-index: 5;
     }
     .overlay > * {
       margin: 6px;
@@ -33,6 +34,7 @@
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
         "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
         "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
       }
     }
@@ -44,8 +46,9 @@
   <canvas id="canvas" tabindex="0" style="outline: none;"></canvas>
   <script type="module">
     import * as THREE from "three";
-    import { SparkRenderer, SplatMesh, SparkControls, isMobile } from "@sparkjsdev/spark";
+    import { SplatMesh, SparkControls, isMobile } from "@sparkjsdev/spark";
     import GUI from "lil-gui";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
     const initialWorld = "Coit Tower, SF";
     const worlds = {
@@ -86,30 +89,19 @@
 
     const title = document.getElementById("title");
     const subtitle = document.getElementById("subtitle");
+    const canvas = document.getElementById("canvas");
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#000000");
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
-    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("canvas") });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-    window.addEventListener('resize', onWindowResize, false);
-
-    const spark = new SparkRenderer({
-      renderer,
-      pagedExtSplats: true,
-      coneFov0: 70.0,
-      coneFov: 120.0,
-      behindFoveate: 0.2,
-      coneFoveate: 0.4,
+    const env = await setupSparkExample({
+      canvas,
+      cameraConfig: { fov: 75, near: 0.01, position: [0, 0, 0], lookAt: [0, 0, -1] },
+      sparkOptions: {
+        pagedExtSplats: true,
+        coneFov0: 70.0,
+        coneFov: 120.0,
+        behindFoveate: 0.2,
+        coneFoveate: 0.4,
+      },
     });
-    scene.add(spark);
 
     const settings = {
       worldKey: initialWorld,
@@ -118,7 +110,7 @@
 
     function selectWorld(worldKey) {
       if (world) {
-        scene.remove(world);
+        env.scene.remove(world);
         world.dispose();
       }
 
@@ -127,31 +119,33 @@
       world.quaternion.set(...quaternion ?? [0, 0, 0, 1]).normalize();
       world.position.set(...(position ?? [0, 0, 0]));
       world.scale.setScalar(scale ?? 1.0);
-      scene.add(world);
-      scene.background = new THREE.Color(background);
+      env.add(world);
+      // env.scene.background drives the splat scene's clear colour on
+      // every host — on three/aframe directly, and on babylon via the
+      // texture-bridge's internal Three render (which gets composited).
+      env.scene.background = new THREE.Color(background);
 
-      camera.position.set(...(cameraPosition ?? [0, 0, 0]));
-      camera.quaternion.set(...(cameraQuaternion ?? [0, 0, 0, 1])).normalize();
+      env.camera.position.set(...(cameraPosition ?? [0, 0, 0]));
+      env.camera.quaternion.set(...(cameraQuaternion ?? [0, 0, 0, 1])).normalize();
       title.textContent = worldKey;
       subtitle.textContent = description;
-      spark.lodSplatScale = lodSplatScale ?? 1.0;
-      renderer.setPixelRatio(highDpi ? window.devicePixelRatio : 1);
-      onWindowResize();
-      console.log("Render size", renderer.domElement.width, renderer.domElement.height);
-      renderer.domElement.focus();
+      env.spark.lodSplatScale = lodSplatScale ?? 1.0;
+      // Pixel ratio applies to the WebGLRenderer Spark draws into — under
+      // babylon that's host.threeRenderer (the internal renderer); on
+      // three/aframe it's the visible WebGLRenderer.
+      env.renderer.setPixelRatio(highDpi ? window.devicePixelRatio : 1);
     }
 
     selectWorld(settings.worldKey);
 
     const gui = new GUI({ title: "Settings" });
     gui.add(settings, "worldKey", Object.keys(worlds)).name("World").onChange(selectWorld);
-    gui.add(spark, "lodSplatScale", 0.01, 2.5, 0.001).name("Level of Detail").listen();
+    gui.add(env.spark, "lodSplatScale", 0.01, 2.5, 0.001).name("Level of Detail").listen();
 
-    const controls = new SparkControls({ canvas: renderer.domElement });
+    const controls = new SparkControls({ canvas: env.renderer.domElement });
 
-    renderer.setAnimationLoop(function animate(time) {
-      controls.update(camera);
-      renderer.render(scene, camera);
+    env.run(() => {
+      controls.update(env.camera);
     });
   </script>
 </body>

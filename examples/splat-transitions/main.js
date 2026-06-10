@@ -1,37 +1,16 @@
-import { SparkRenderer } from "@sparkjsdev/spark";
 import { GUI } from "lil-gui";
 import * as THREE from "three";
+import { setupSparkExample } from "../js/spark-engine.js";
 
-// Central renderer/scene/camera shared by effects
+// Pre-existing <canvas id="canvas"> from index.html — pass it through
+// the engine helper so all three hosts mount onto the same DOM node.
 const canvas = document.getElementById("canvas");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
-renderer.setClearColor(0x000000, 1);
 
-const scene = new THREE.Scene();
-const spark = new SparkRenderer({ renderer });
-scene.add(spark);
-
-const camera = new THREE.PerspectiveCamera(
-  50,
-  canvas.clientWidth / canvas.clientHeight,
-  0.01,
-  2000,
-);
-camera.position.set(0, 3, 8);
-camera.lookAt(0, 0, 0);
-scene.add(camera);
-
-// Resize handling
-function handleResize() {
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
-window.addEventListener("resize", handleResize);
+const env = await setupSparkExample({
+  canvas,
+  cameraConfig: { fov: 50, near: 0.01, far: 2000, position: [0, 3, 8], lookAt: [0, 0, 0] },
+  clearColor: 0x000000,
+});
 
 // GUI
 const gui = new GUI();
@@ -59,7 +38,7 @@ async function switchEffect(name) {
     try {
       active.api.dispose?.();
     } catch {}
-    if (active.group) scene.remove(active.group);
+    if (active.group) env.scene.remove(active.group);
     active = null;
   }
 
@@ -73,27 +52,38 @@ async function switchEffect(name) {
 
   const loader = effectFiles[name];
   if (!loader) return;
-  const preChildren = new Set(scene.children);
+  const preChildren = new Set(env.scene.children);
   const mod = await loader();
   if (myToken !== switchCounter) {
     // A newer switch started; ignore this one
     return;
   }
 
-  const context = { THREE, scene, camera, renderer, spark };
+  // Effects modules receive THREE + the scene-graph triple. Under aframe
+  // / babylon these resolve to the same Three triple the Spark host
+  // owns, so each effect's mesh-add path lands in the scene that gets
+  // composited / rendered without any per-engine branching inside the
+  // effect itself.
+  const context = {
+    THREE,
+    scene: env.scene,
+    camera: env.camera,
+    renderer: env.renderer,
+    spark: env.spark,
+  };
   const api = await mod.init(context);
   if (myToken !== switchCounter) {
     try {
       api.dispose?.();
     } catch {}
     // Remove any children added during this init
-    for (const child of [...scene.children]) {
-      if (!preChildren.has(child)) scene.remove(child);
+    for (const child of [...env.scene.children]) {
+      if (!preChildren.has(child)) env.scene.remove(child);
     }
     return;
   }
 
-  if (api.group) scene.add(api.group);
+  if (api.group) env.add(api.group);
   active = { api, group: api.group };
 
   // Setup a per-effect GUI folder if exposed
@@ -106,20 +96,20 @@ async function switchEffect(name) {
 
   // Give focus back to the canvas so keyboard controls work immediately
   try {
-    canvas.focus();
+    env.renderer.domElement.focus();
   } catch {}
 }
 
 gui.add(params, "Effect", Object.keys(effectFiles)).onChange(switchEffect);
 
-// Animation loop
-renderer.setAnimationLoop((timeMs) => {
+// Animation loop — env.run handles the per-host setAnimationLoop /
+// runRenderLoop and feeds (time, deltaTime) into the closure.
+env.run((timeMs) => {
   const t = timeMs * 0.001;
   const dt = t - (last || t);
   last = t;
 
   if (active?.api?.update) active.api.update(dt, t);
-  renderer.render(scene, camera);
 });
 
 // Kickoff
