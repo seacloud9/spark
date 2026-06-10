@@ -209,10 +209,25 @@ export class SparkBabylonMesh {
       scene: this.threeScene,
       camera: this.threeCamera,
     });
+    // Native mode never calls `threeRenderer.render(scene, camera)` —
+    // Babylon owns the visible draw pass. But SparkRenderer's
+    // `driveSort` (SparkRenderer.ts L548) expects
+    // `renderer.properties.get(orderingTexture).__webglTexture` to
+    // exist on its second-and-later sort, which Three only lazily
+    // allocates when the texture is bound during a render. Force Three
+    // to upload the ordering texture each sync so the next sort's
+    // `texSubImage2D` path finds the GL handle instead of throwing
+    // "ordering texture not found". Same applies to the accumulator
+    // target textures the bridge reads back below.
+    if (this.sparkRenderer.orderingTexture) {
+      this.sparkRenderer.renderer.initTexture(
+        this.sparkRenderer.orderingTexture,
+      );
+    }
     // Mirror the Three-side ordering + accumulator textures onto the
     // Babylon-side material samplers. See SparkBabylonTextureBridge
-    // for the Three→Babylon transfer details (CPU mirror for ordering,
-    // gl.readRenderTargetPixels per layer for the MRT extSplats pair).
+    // for the Three→Babylon transfer details (GPU readback via private
+    // framebuffer for both ordering and the MRT extSplats pair).
     this.textureBridge.syncOnce();
     this.bindBridgeTextures();
     this.syncUniforms();

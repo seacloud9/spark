@@ -31,6 +31,7 @@ export interface BabylonMaterialHost extends BabylonShaderChunkHost {
   Constants: Pick<
     typeof BabylonConstants,
     | "ALPHA_COMBINE"
+    | "ALPHA_PREMULTIPLIED"
     | "TEXTUREFORMAT_RGBA_INTEGER"
     | "TEXTURETYPE_UNSIGNED_INTEGER"
     | "TEXTURE_NEAREST_SAMPLINGMODE"
@@ -182,19 +183,22 @@ uniform bool isOrthographic;
     //   splats; Babylon defaults to true so we disable explicitly)
     // - side: DoubleSide / backFaceCulling: false (Spark's quad faces
     //   either way depending on per-instance rotation)
-    // - alphaMode: ALPHA_COMBINE matches Three's standard transparent
-    //   blend; the splat fragment emits `vec4(rgb*a, a)` (premultiplied)
-    //   when PREMULTIPLIED_ALPHA is defined, which composites correctly
-    //   under either ALPHA_COMBINE or ALPHA_PREMULTIPLIED on Babylon
-    //   because the source factor on the premultiplied output already
-    //   bakes the alpha multiply. ALPHA_COMBINE is the safe default
-    //   since it matches what Three's transparent ShaderMaterial uses.
+    // - alphaMode: must match the fragment's premultiplied output. The
+    //   shader emits `vec4(rgb*a, a)` when PREMULTIPLIED_ALPHA is
+    //   defined (the default). Pairing this with ALPHA_COMBINE
+    //   (`src*src.a + dst*(1-src.a)`) would apply alpha twice and dim
+    //   every splat to invisibility. ALPHA_PREMULTIPLIED
+    //   (`src*1 + dst*(1-src.a)`) consumes the premultiplied output
+    //   correctly. When `premultipliedAlpha === false` the fragment
+    //   emits raw rgba and ALPHA_COMBINE is the right pair.
     // - alpha < 1 forces Babylon's `needAlphaBlendingForMesh` heuristic
     //   to keep the blend path on even if the `needAlphaBlending`
     //   constructor flag is ignored on some pipelines.
     this.material.disableDepthWrite = true;
     this.material.backFaceCulling = false;
-    this.material.alphaMode = B.Constants.ALPHA_COMBINE;
+    this.material.alphaMode = premultipliedAlpha
+      ? B.Constants.ALPHA_PREMULTIPLIED
+      : B.Constants.ALPHA_COMBINE;
     this.material.alpha = 0.999;
   }
 

@@ -21,6 +21,7 @@ export interface BabylonTextureBridgeHost {
   Constants: Pick<
     typeof BabylonConstants,
     | "ALPHA_COMBINE"
+    | "ALPHA_PREMULTIPLIED"
     | "TEXTUREFORMAT_RGBA_INTEGER"
     | "TEXTURETYPE_UNSIGNED_INTEGER"
     | "TEXTURE_NEAREST_SAMPLINGMODE"
@@ -58,6 +59,13 @@ interface OrderingTextureState {
   texture: BabylonRawTexture;
   width: number;
   height: number;
+  /**
+   * Flat scratch buffer reused each frame to hold the readback of the
+   * Three ordering DataTexture from the GPU. Sized to
+   * `width * height * 4` (RGBA32UI = 4 uint32 per pixel). Reallocated
+   * only when the upstream Spark ordering texture grows.
+   */
+  scratch: Uint32Array;
 }
 
 /**
@@ -144,9 +152,28 @@ export class SparkBabylonTextureBridge {
     if (!orderingTex) {
       return;
     }
-    const data = orderingTex.image.data as Uint32Array;
     const width = orderingTex.image.width;
     const height = orderingTex.image.height;
+    const pixelCount = width * height * 4;
+
+    // The Three.DataTexture's `image.data` Uint32Array is the buffer
+    // Spark used when it FIRST constructed the texture; SparkRenderer
+    // subsequently writes updated sort results directly to the GPU via
+    // `gl.texSubImage2D` (SparkRenderer.ts L1080-1097) without
+    // refreshing this CPU mirror. Reading `image.data` therefore gets
+    // a stale first-frame snapshot. Read straight from the GPU
+    // instead, mirroring the extSplats GPU-readback path.
+    let scratch: Uint32Array;
+    if (
+      this.ordering &&
+      this.ordering.width === width &&
+      this.ordering.height === height
+    ) {
+      scratch = this.ordering.scratch;
+    } else {
+      scratch = new Uint32Array(pixelCount);
+    }
+    this.gpuReadOrderingTexture(orderingTex, width, height, scratch);
 
     const B = this.babylon;
     if (
@@ -156,7 +183,7 @@ export class SparkBabylonTextureBridge {
     ) {
       this.ordering?.texture.dispose();
       const texture = new B.RawTexture(
-        data,
+        scratch,
         width,
         height,
         B.Engine.TEXTUREFORMAT_RGBA_INTEGER,
@@ -166,10 +193,56 @@ export class SparkBabylonTextureBridge {
         B.Texture.NEAREST_SAMPLINGMODE,
         B.Constants.TEXTURETYPE_UNSIGNED_INTEGER,
       );
-      this.ordering = { texture, width, height };
+      this.ordering = { texture, width, height, scratch };
     } else {
-      this.ordering.texture.update(data);
+      this.ordering.texture.update(scratch);
     }
+  }
+
+  /**
+   * Read the current contents of Spark's ordering DataTexture from the
+   * GPU via a private framebuffer. Mirrors the extSplats path but uses
+   * `framebufferTexture2D` (regular 2D texture) instead of
+   * `framebufferTextureLayer` (texture array layer).
+   */
+  private gpuReadOrderingTexture(
+    orderingTex: THREE.DataTexture,
+    width: number,
+    height: number,
+    scratch: Uint32Array,
+  ): void {
+    const threeRenderer = this.sparkRenderer.renderer;
+    const gl = threeRenderer.getContext() as WebGL2RenderingContext;
+    const texProps = threeRenderer.properties.get(orderingTex) as
+      | { __webglTexture?: WebGLTexture }
+      | undefined;
+    const webglTexture = texProps?.__webglTexture;
+    if (!webglTexture) {
+      return;
+    }
+
+    const prevReadFb = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING);
+    if (!this.readFramebuffer) {
+      this.readFramebuffer = gl.createFramebuffer();
+    }
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.readFramebuffer);
+    gl.framebufferTexture2D(
+      gl.READ_FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      webglTexture,
+      0,
+    );
+    gl.readPixels(
+      0,
+      0,
+      width,
+      height,
+      gl.RGBA_INTEGER,
+      gl.UNSIGNED_INT,
+      scratch,
+    );
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, prevReadFb);
   }
 
   private syncExtSplats(): void {

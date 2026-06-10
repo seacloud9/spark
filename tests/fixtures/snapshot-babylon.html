@@ -89,6 +89,8 @@
       const babylonTextureHost = { RawTexture, Layer, Engine, Texture, Color4 };
       // Native mode needs the fuller Babylon surface (BabylonMeshHost) for
       // SparkBabylonMaterial + SparkBabylonMesh + SparkBabylonTextureBridge.
+      // Phase D step 7 added ALPHA_PREMULTIPLIED to the consumed Constants
+      // slot so the fixture's host object must surface it too.
       const babylonNativeHost = {
         Effect,
         ShaderMaterial,
