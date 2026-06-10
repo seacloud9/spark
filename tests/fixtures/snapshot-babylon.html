@@ -19,19 +19,48 @@
     <script type="module">
       import {
         Color4,
+        Constants,
+        Effect,
         Engine,
         FreeCamera,
         Layer,
+        Matrix,
+        Mesh,
         RawTexture,
+        RawTexture2DArray,
         Scene,
+        ShaderMaterial,
         Texture,
+        VertexData,
         Vector3,
       } from "@babylonjs/core";
       import { SparkBabylonHost } from "/src/backends/babylon/SparkBabylonHost.ts";
       import { getScene, getSceneName } from "/tests/fixtures/scenes.mjs";
 
+      // Surface init errors into the page DOM so Playwright's text-on-
+      // body assertion can show them instead of a generic "data-ready
+      // never set" timeout. Phase D adds enough new code paths
+      // (registerSparkBabylonShaderChunks, ShaderMaterial compile,
+      // RawTexture2DArray construction) that opaque init failures
+      // become hard to diagnose without a console-bridge.
+      window.addEventListener("error", (event) => {
+        document.body.dataset.error = String(
+          event.error?.stack || event.error?.message || event.message,
+        );
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        document.body.dataset.error = String(
+          event.reason?.stack || event.reason?.message || event.reason,
+        );
+      });
+
       const sceneName = getSceneName();
       const sceneCfg = getScene(sceneName);
+      // Phase D: ?mode=native flips the host from the MVP texture-bridge
+      // Layer composite to the native ShaderMaterial + Mesh path. Default
+      // is "texture" so existing matrix captures stay unchanged.
+      const url = new URL(window.location.href);
+      const mode = url.searchParams.get("mode") === "native" ? "native" : "texture";
 
       const canvas = document.querySelector("#view");
       const engine = new Engine(canvas, false, {
@@ -43,10 +72,13 @@
       const scene = new Scene(engine);
       scene.clearColor = new Color4(0, 0, 0, 1);
       scene.autoClear = true;
-      // Babylon refuses to render a scene without an active camera, even
-      // when all visible content comes from a background Layer. A dummy
-      // FreeCamera satisfies the guard without affecting the composited
-      // image.
+      // Babylon refuses to render a scene without an active camera. In
+      // texture mode the splat image comes from a background Layer so a
+      // placeholder FreeCamera at the origin is fine. In native mode the
+      // splat mesh is drawn through the active camera — we still keep a
+      // FreeCamera placeholder because the splat shader writes gl_Position
+      // entirely from Spark's Three-camera projection uniform, so the
+      // Babylon camera's transform does not affect the rendered splats.
       const placeholderCam = new FreeCamera(
         "placeholder",
         new Vector3(0, 0, 0),
@@ -54,8 +86,26 @@
       );
       scene.activeCamera = placeholderCam;
 
+      const babylonTextureHost = { RawTexture, Layer, Engine, Texture, Color4 };
+      // Native mode needs the fuller Babylon surface (BabylonMeshHost) for
+      // SparkBabylonMaterial + SparkBabylonMesh + SparkBabylonTextureBridge.
+      const babylonNativeHost = {
+        Effect,
+        ShaderMaterial,
+        Mesh,
+        VertexData,
+        Matrix,
+        Constants,
+        RawTexture,
+        RawTexture2DArray,
+        Texture,
+        Engine,
+      };
+
       const host = new SparkBabylonHost({
-        babylon: { RawTexture, Layer, Engine, Texture, Color4 },
+        babylon: babylonTextureHost,
+        babylonNative: mode === "native" ? babylonNativeHost : undefined,
+        mode,
         scene,
         width: 1024,
         height: 768,
@@ -92,21 +142,49 @@
       await scene.whenReadyAsync();
 
       let frames = 0;
-      for (let i = 0; i < 10; i++) {
-        await host.renderOnce();
-        scene.render();
-        frames += 1;
-        await new Promise((resolve) => requestAnimationFrame(resolve));
+      try {
+        for (let i = 0; i < 10; i++) {
+          await host.renderOnce();
+          scene.render();
+          frames += 1;
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+      } catch (err) {
+        document.body.dataset.error = String(err?.stack || err?.message || err);
+        throw err;
       }
 
       window.sparkBabylonSnapshotReady = {
         backend: "babylon",
         scene: sceneName,
+        mode,
         engineVersion: Engine.Version,
         meshSplats: built.splatCount,
         activeSplats: host.sparkRenderer.activeSplats,
         framesRendered: frames,
         isPlaceholder: false,
+        // Phase D diagnostic — surface native-mode runtime state so e2e
+        // failures point at the right layer (mesh setup vs uniform sync
+        // vs texture bridge vs shader output).
+        nativeMeshState:
+          mode === "native"
+            ? {
+                thinInstanceCount: host.nativeMesh.mesh.thinInstanceCount,
+                isVisible: host.nativeMesh.mesh.isVisible,
+                isEnabled: host.nativeMesh.mesh.isEnabled(),
+                materialReady: host.nativeMaterial.material.isReady(
+                  host.nativeMesh.mesh,
+                ),
+                displayExtSplats: host.sparkRenderer.display.extSplats,
+                targetWidth: host.sparkRenderer.display.target?.width ?? 0,
+                targetHeight: host.sparkRenderer.display.target?.height ?? 0,
+                targetDepth: host.sparkRenderer.display.target?.depth ?? 0,
+                orderingWidth:
+                  host.sparkRenderer.orderingTexture?.image.width ?? 0,
+                orderingHeight:
+                  host.sparkRenderer.orderingTexture?.image.height ?? 0,
+              }
+            : undefined,
       };
       document.body.dataset.ready = "true";
     </script>

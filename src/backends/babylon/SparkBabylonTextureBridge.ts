@@ -20,6 +20,7 @@ export interface BabylonTextureBridgeHost {
   RawTexture2DArray: typeof BabylonRawTexture2DArray;
   Constants: Pick<
     typeof BabylonConstants,
+    | "ALPHA_COMBINE"
     | "TEXTUREFORMAT_RGBA_INTEGER"
     | "TEXTURETYPE_UNSIGNED_INTEGER"
     | "TEXTURE_NEAREST_SAMPLINGMODE"
@@ -187,14 +188,31 @@ export class SparkBabylonTextureBridge {
       depth,
       0,
     );
-    this.extSplats2 = this.syncExtSplatsLayer(
-      this.extSplats2,
-      target,
-      width,
-      height,
-      depth,
-      1,
-    );
+    if (this.sparkRenderer.display.extSplats) {
+      // extSplats mode: target.textures = [packed, target2, target3];
+      // SparkRenderer binds extSplats=packedSlot0, extSplats2=slot1.
+      // Mirror that here by reading the second integer slot too.
+      this.extSplats2 = this.syncExtSplatsLayer(
+        this.extSplats2,
+        target,
+        width,
+        height,
+        depth,
+        1,
+      );
+    } else {
+      // !extSplats mode (default): target.textures = [packed, target3]
+      // where target3 is an aux RGBA8 texture the shader ignores in this
+      // branch. SparkRenderer binds the same packed texture to both
+      // extSplats and extSplats2 samplers. Mirror by reusing the slot-0
+      // mirror as the slot-1 mirror so `setTexture("extSplats2", ...)`
+      // points at valid integer data instead of garbage / an aux RGBA8
+      // mirror that fails to upload as RGBA32UI.
+      if (this.extSplats2 && this.extSplats2 !== this.extSplats) {
+        this.extSplats2.texture.dispose();
+      }
+      this.extSplats2 = this.extSplats;
+    }
   }
 
   private syncExtSplatsLayer(
@@ -220,25 +238,21 @@ export class SparkBabylonTextureBridge {
       scratch = new Uint32Array(totalPixelCount);
     }
 
-    const threeRenderer = this.sparkRenderer.renderer;
-    for (let layer = 0; layer < depth; layer++) {
-      const offset = layer * layerPixelCount;
-      const layerView = new Uint32Array(
-        scratch.buffer,
-        scratch.byteOffset + offset * 4,
-        layerPixelCount,
-      );
-      threeRenderer.readRenderTargetPixels(
-        target,
-        0,
-        0,
-        width,
-        height,
-        layerView,
-        layer,
-        textureIndex,
-      );
-    }
+    // Three's `readRenderTargetPixels` only allows RGBA/UnsignedByte
+    // (see WebGLRenderer.js — it errors and returns for any other
+    // format). Spark's accumulator targets are RGBAIntegerFormat /
+    // UnsignedIntType (RGBA32UI). Bypass the wrapper and call
+    // `gl.readPixels` directly against a private framebuffer with the
+    // right COLOR_ATTACHMENT + texture-array layer bound.
+    this.gpuReadRenderTargetLayer(
+      target,
+      textureIndex,
+      width,
+      height,
+      depth,
+      scratch,
+      layerPixelCount,
+    );
 
     const B = this.babylon;
     if (
@@ -266,12 +280,90 @@ export class SparkBabylonTextureBridge {
     return state;
   }
 
+  private readFramebuffer: WebGLFramebuffer | null = null;
+
+  private gpuReadRenderTargetLayer(
+    target: THREE.WebGLArrayRenderTarget,
+    textureIndex: 0 | 1,
+    width: number,
+    height: number,
+    depth: number,
+    scratch: Uint32Array,
+    layerPixelCount: number,
+  ): void {
+    const threeRenderer = this.sparkRenderer.renderer;
+    const gl = threeRenderer.getContext() as WebGL2RenderingContext;
+
+    // Force Three to allocate the GL textures + framebuffer for the
+    // target if it hasn't already — `properties.get(threeTexture)` only
+    // returns the WebGL object after Three uses it. Spark has already
+    // rendered into the target this frame so the GL texture should
+    // exist; this `get` is then a cheap lookup.
+    const threeTexture = target.textures[textureIndex];
+    if (!threeTexture) {
+      return;
+    }
+    const texProps = threeRenderer.properties.get(threeTexture) as
+      | { __webglTexture?: WebGLTexture }
+      | undefined;
+    const webglTexture = texProps?.__webglTexture;
+    if (!webglTexture) {
+      return;
+    }
+
+    const prevReadFb = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING);
+    if (!this.readFramebuffer) {
+      this.readFramebuffer = gl.createFramebuffer();
+    }
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.readFramebuffer);
+
+    for (let layer = 0; layer < depth; layer++) {
+      gl.framebufferTextureLayer(
+        gl.READ_FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        webglTexture,
+        0,
+        layer,
+      );
+      const layerView = new Uint32Array(
+        scratch.buffer,
+        scratch.byteOffset + layer * layerPixelCount * 4,
+        layerPixelCount,
+      );
+      gl.readPixels(
+        0,
+        0,
+        width,
+        height,
+        gl.RGBA_INTEGER,
+        gl.UNSIGNED_INT,
+        layerView,
+      );
+    }
+
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, prevReadFb);
+  }
+
   dispose(): void {
     this.ordering?.texture.dispose();
     this.ordering = null;
-    this.extSplats?.texture.dispose();
+    // In !extSplats mode extSplats2 may alias extSplats — dispose only
+    // once.
+    const seen = new Set<unknown>();
+    if (this.extSplats) {
+      this.extSplats.texture.dispose();
+      seen.add(this.extSplats);
+    }
+    if (this.extSplats2 && !seen.has(this.extSplats2)) {
+      this.extSplats2.texture.dispose();
+    }
     this.extSplats = null;
-    this.extSplats2?.texture.dispose();
     this.extSplats2 = null;
+    if (this.readFramebuffer) {
+      const gl =
+        this.sparkRenderer.renderer.getContext() as WebGL2RenderingContext;
+      gl.deleteFramebuffer(this.readFramebuffer);
+      this.readFramebuffer = null;
+    }
   }
 }

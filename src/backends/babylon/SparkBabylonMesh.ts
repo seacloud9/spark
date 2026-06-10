@@ -65,9 +65,23 @@ const QUAD_POSITIONS = new Float32Array([
   -1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0,
 ]);
 const QUAD_INDICES = new Uint32Array([0, 1, 2, 0, 2, 3]);
-const IDENTITY_MATRIX = new Float32Array([
-  1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-]);
+const IDENTITY_MATRIX_ROW = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+/**
+ * Build a Float32Array of `count` identity 4x4 matrices, packed contiguously.
+ * Babylon's thin-instance API requires one matrix per instance in the
+ * matrix buffer even when the shader does not use it — `thinInstanceCount`
+ * is clamped to `matrixBuffer.length / 16`. Spark's vertex shader writes
+ * `gl_Position` entirely from accumulator + uniform data, so the matrix
+ * values themselves are inert; only the buffer size matters.
+ */
+function identityMatrixBuffer(count: number): Float32Array {
+  const buf = new Float32Array(count * 16);
+  for (let i = 0; i < count; i++) {
+    buf.set(IDENTITY_MATRIX_ROW, i * 16);
+  }
+  return buf;
+}
 
 /**
  * Babylon-side counterpart of `SparkRenderer` (Spark's `THREE.Mesh`
@@ -120,6 +134,7 @@ export class SparkBabylonMesh {
   private readonly projectionMatrixScratch: BabylonMatrix;
 
   private observer: Observer<BabylonScene> | null = null;
+  private matrixBufferCapacity = 0;
 
   constructor(options: SparkBabylonMeshOptions) {
     const B = options.babylon;
@@ -140,11 +155,16 @@ export class SparkBabylonMesh {
     vertexData.indices = QUAD_INDICES;
     vertexData.applyToMesh(this.mesh, false);
 
-    // Single identity matrix in the matrix buffer; thinInstanceCount
-    // drives the actual instance count each frame. Spark's vertex
-    // shader reads everything per-instance via texelFetch + gl_InstanceID,
-    // so no per-instance world matrix is needed.
-    this.mesh.thinInstanceSetBuffer("matrix", IDENTITY_MATRIX, 16, true);
+    // Matrix buffer sized to the active instance count each frame.
+    // Babylon clamps `thinInstanceCount` to `matrixBuffer.length / 16`
+    // even when the vertex shader does not use the matrix attribute,
+    // so the buffer must grow as `spark.activeSplats` grows.
+    // `ensureInstanceCapacity` reallocates with identity matrices when
+    // the count exceeds current capacity; the values themselves are
+    // unused (Spark's shader writes gl_Position entirely from
+    // accumulator + uniform data). Start with a small placeholder so
+    // the first attach call has a valid buffer to work with.
+    this.ensureInstanceCapacity(1);
     this.mesh.thinInstanceCount = 0;
 
     this.mesh.material = this.material.material;
@@ -196,7 +216,25 @@ export class SparkBabylonMesh {
     this.textureBridge.syncOnce();
     this.bindBridgeTextures();
     this.syncUniforms();
-    this.mesh.thinInstanceCount = this.sparkRenderer.activeSplats;
+    const activeSplats = this.sparkRenderer.activeSplats;
+    this.ensureInstanceCapacity(activeSplats);
+    this.mesh.thinInstanceCount = activeSplats;
+  }
+
+  private ensureInstanceCapacity(count: number): void {
+    if (count <= this.matrixBufferCapacity) {
+      return;
+    }
+    // Double the capacity on growth to amortize the realloc cost across
+    // multiple frames during the first-load splat ramp-up.
+    const nextCapacity = Math.max(count, this.matrixBufferCapacity * 2, 1);
+    this.mesh.thinInstanceSetBuffer(
+      "matrix",
+      identityMatrixBuffer(nextCapacity),
+      16,
+      true,
+    );
+    this.matrixBufferCapacity = nextCapacity;
   }
 
   private bindBridgeTextures(): void {

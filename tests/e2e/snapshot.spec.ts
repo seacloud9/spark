@@ -59,10 +59,23 @@ const NETWORK_SCENES = new Set<SceneName>([
 interface BackendSnapshotMeta {
   backend: string;
   scene: string;
+  mode?: string;
   meshSplats?: number;
   activeSplats?: number;
   isPlaceholder?: boolean;
 }
+
+// Phase D: scenes the native-mode Babylon path is asserted across.
+// Start with the procedural scenes (no network, no LoD, no animations) so
+// the first native-mode validation surface is the most predictable. Add
+// URL scenes as they pass the texture-vs-native parity gate.
+const NATIVE_BABYLON_SCENES = new Set<SceneName>([
+  "axes",
+  "grid",
+  "sphere",
+  "multi",
+  "tinted",
+]);
 
 async function diffParityPng(opts: {
   baseline: string;
@@ -208,6 +221,118 @@ for (const scene of SCENES) {
         tolerance: 0.05,
       });
     });
+
+    if (NATIVE_BABYLON_SCENES.has(scene)) {
+      test(`captures babylon-native-${scene}.png`, async ({ page }) => {
+        // Native mode replaces the texture-bridge Layer composite with a
+        // real Babylon ShaderMaterial + Mesh inside the render pass.
+        // Same vite cold-cache concerns as texture mode, plus the extra
+        // cost of registering Spark's shader chunks on Babylon's Effect
+        // store on first construction.
+        test.setTimeout(NETWORK_SCENES.has(scene) ? 540_000 : 180_000);
+
+        // Phase D: capture page errors and console output so opaque
+        // init failures (shader compile errors, missing Babylon
+        // constructors, etc.) surface in the test log.
+        const pageErrors: string[] = [];
+        page.on("pageerror", (err) =>
+          pageErrors.push(`pageerror: ${err.message}\n${err.stack}`),
+        );
+        page.on("console", (msg) => {
+          if (
+            msg.type() === "error" ||
+            msg.type() === "warning" ||
+            msg.text().startsWith("[bridge]") ||
+            msg.text().startsWith("[native diag]")
+          ) {
+            pageErrors.push(`console.${msg.type()}: ${msg.text()}`);
+          }
+        });
+
+        await page.goto(
+          `/tests/fixtures/snapshot-babylon.html?scene=${scene}&mode=native`,
+          { timeout: NETWORK_SCENES.has(scene) ? 90_000 : 60_000 },
+        );
+
+        // If the fixture hit an init failure, surface it via the body
+        // dataset bridge before the data-ready wait fires.
+        await page.waitForFunction(
+          () =>
+            document.body.dataset.ready === "true" ||
+            document.body.dataset.error,
+          undefined,
+          { timeout: NETWORK_SCENES.has(scene) ? 360_000 : 60_000 },
+        );
+        const bodyError = await page.evaluate(
+          () => document.body.dataset.error || "",
+        );
+        if (bodyError) {
+          throw new Error(
+            `native-mode fixture failed for ${scene}:\n${bodyError}\n\nPage errors:\n${pageErrors.join("\n")}`,
+          );
+        }
+        await expect(page.locator("body")).toHaveAttribute(
+          "data-ready",
+          "true",
+          { timeout: 5_000 },
+        );
+        await page.locator("#view").screenshot({
+          path: path.join(tmpDir, `babylon-native-${scene}.png`),
+        });
+        const meta = await page.evaluate(
+          () =>
+            (
+              window as Window & {
+                sparkBabylonSnapshotReady: BackendSnapshotMeta;
+              }
+            ).sparkBabylonSnapshotReady,
+        );
+        expect(meta.backend).toBe("babylon");
+        expect(meta.scene).toBe(scene);
+        expect(meta.mode).toBe("native");
+        expect(meta.meshSplats).toBeGreaterThan(0);
+        expect(meta.activeSplats).toBeGreaterThan(0);
+        expect(meta.isPlaceholder).toBe(false);
+        // Surface native-mode runtime state to the test log so the
+        // failure message of a blank capture says WHY it is blank.
+        // eslint-disable-next-line no-console
+        console.log(
+          `[native diag] ${scene}: ${JSON.stringify((meta as BackendSnapshotMeta & { nativeMeshState?: unknown }).nativeMeshState)}`,
+        );
+        // Always print the captured page console (filtered by our
+        // listener above) so the bridge readback log surfaces in the
+        // test output even when the capture passes.
+        if (pageErrors.length) {
+          // eslint-disable-next-line no-console
+          console.log(`[page log] ${scene}:\n  ${pageErrors.join("\n  ")}`);
+        }
+      });
+
+      // KNOWN BROKEN: native-mode splats currently render fully
+      // transparent — the bridge transfers integer-format extSplats
+      // textures correctly (verified during commit 6 debug — readback
+      // returns real packed splat data), the shader compiles after
+      // the preamble fix, thinInstanceCount grows with the matrix
+      // buffer, and Babylon draws N quads. The remaining issue is
+      // most likely that `spark.orderingTexture.image.data` is the
+      // FIRST frame's `result.ordering` only — SparkRenderer updates
+      // the GPU directly via `texSubImage2D` on subsequent frames
+      // (SparkRenderer.ts L1084) and does not refresh the
+      // `THREE.DataTexture` CPU buffer the bridge currently reads.
+      // The capture test runs and the diff PNG is generated for
+      // review, but the equality assertion is fixme'd until the
+      // ordering bridge reads from the GPU (mirroring the
+      // extSplats path).
+      test.fixme(`Three vs Babylon native parity (${scene})`, async () => {
+        await diffParityPng({
+          baseline: `three-${scene}.png`,
+          candidate: `babylon-native-${scene}.png`,
+          diffOut: `parity-babylon-native-${scene}.png`,
+          label: `three vs babylon-native / ${scene}`,
+          tolerance: 0.05,
+        });
+      });
+    }
 
     test(`composes side-by-side review image (${scene})`, async () => {
       const panels = await Promise.all([

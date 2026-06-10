@@ -1,6 +1,8 @@
 # Phase D — Native Babylon Spark material (design notes)
 
-**Status:** not started. This file is a design checkpoint to seed the next session of work on the largest piece of the multi-backend rollout. See `MULTI-BACKEND-PARITY-PLAN.md` for the rollout-wide context.
+**Status (2026-06-10):** Steps 1–6 of 6 landed. Pipeline constructs, shader compiles, draws instances, and the host's `mode: "native"` flag is wired through the e2e fixture. **Splats are not yet visually rendering** — known regression in the texture bridge: the bridge reads `spark.orderingTexture.image.data` (the CPU `Uint32Array` the `THREE.DataTexture` was initialised with), but `SparkRenderer` updates the GPU side directly via `gl.texSubImage2D` on subsequent frames (`src/SparkRenderer.ts` L1084) and never refreshes that CPU buffer. The bridge therefore sees stale (or first-frame-only) ordering data. The extSplats pair is read directly from the GPU via `gl.readPixels` against a private framebuffer (Three's `readRenderTargetPixels` rejects integer formats; the bypass is in `SparkBabylonTextureBridge.gpuReadRenderTargetLayer`) and verified to return real packed splat data during commit 6 debug. Fix: mirror the GPU-readback pattern from extSplats onto ordering. Tracked via `test.fixme` on the `Three vs Babylon native parity` assertion — capture still runs and `tmp/babylon-native-*.png` is generated for review.
+
+See `MULTI-BACKEND-PARITY-PLAN.md` for the rollout-wide context.
 
 **Today (texture-bridge MVP, `SparkBabylonHost`):** Spark runs on an internal offscreen Three.js `WebGLRenderer`, the final RGBA buffer is read back via `gl.readPixels`, and Babylon composites the buffer as a fullscreen background `Layer`. Works, bit-perfect parity, but:
 - Babylon meshes cannot occlude or depth-sort against Spark splats (Layer composites underneath the scene).

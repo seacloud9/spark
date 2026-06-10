@@ -1,4 +1,5 @@
 import type {
+  Constants as BabylonConstants,
   Effect as BabylonEffect,
   Scene as BabylonScene,
   ShaderMaterial as BabylonShaderMaterial,
@@ -27,6 +28,13 @@ export interface BabylonMaterialHost extends BabylonShaderChunkHost {
     shaderPath: string | { vertexSource: string; fragmentSource: string },
     options: Partial<BabylonShaderMaterialOptions>,
   ) => BabylonShaderMaterial;
+  Constants: Pick<
+    typeof BabylonConstants,
+    | "ALPHA_COMBINE"
+    | "TEXTUREFORMAT_RGBA_INTEGER"
+    | "TEXTURETYPE_UNSIGNED_INTEGER"
+    | "TEXTURE_NEAREST_SAMPLINGMODE"
+  >;
 }
 
 export interface SparkBabylonMaterialOptions {
@@ -130,15 +138,30 @@ export class SparkBabylonMaterial {
       ? "#define PREMULTIPLIED_ALPHA\n"
       : "";
 
-    // Three's ShaderMaterial prepends `#version 300 es` when
-    // `glslVersion: THREE.GLSL3` is set; Babylon does not. Prepend it
-    // explicitly so the `in/out/usampler2D/texelFetch` GLSL ES 3.00
-    // surface compiles. The PREMULTIPLIED_ALPHA define mirrors Three's
-    // `premultipliedAlpha: true` ShaderMaterial flag (toggled by the
-    // `premultipliedAlpha` option on this class).
-    const vertexSource = versionLine + premultiplyDefine + shaders.splatVertex;
-    const fragmentSource =
-      versionLine + premultiplyDefine + shaders.splatFragment;
+    // Three's ShaderMaterial auto-injects three things Babylon does not:
+    //   1. `#version 300 es` (Three sets this from `glslVersion: GLSL3`).
+    //   2. `in vec3 position;` — the standard mesh attribute.
+    //   3. `uniform mat4 projectionMatrix;` + the rest of Three's
+    //      automatic camera uniforms (we only reference projectionMatrix
+    //      and the isOrthographic boolean that Three derives from the
+    //      camera type — Spark's mesh code drives both manually from
+    //      the Three camera each frame, so they are passed as user
+    //      uniforms here).
+    // Babylon's GLSL ES 3.00 compiler also requires explicit precision
+    // for every sampler-with-precision-implication type. The shader
+    // file declares `precision highp usampler2DArray` but Babylon's
+    // preprocessor still flags `usampler2D ordering` and `sampler2D`
+    // (logdepthbuf includes) without their own precision lines.
+    const vertexPreamble = `${versionLine}${premultiplyDefine}precision highp usampler2D;
+precision highp sampler2D;
+in vec3 position;
+uniform mat4 projectionMatrix;
+uniform bool isOrthographic;
+`;
+    const fragmentPreamble = `${versionLine}${premultiplyDefine}precision highp sampler2D;
+`;
+    const vertexSource = vertexPreamble + shaders.splatVertex;
+    const fragmentSource = fragmentPreamble + shaders.splatFragment;
 
     this.material = new B.ShaderMaterial(
       name,
@@ -152,6 +175,27 @@ export class SparkBabylonMaterial {
         needAlphaTesting: false,
       },
     );
+    // Match Spark's Three ShaderMaterial defaults:
+    // - depthTest: true (Babylon default — leave alone)
+    // - depthWrite: false (Spark splats are transparent — first-draw
+    //   would otherwise lock the depth and cull later back-to-front
+    //   splats; Babylon defaults to true so we disable explicitly)
+    // - side: DoubleSide / backFaceCulling: false (Spark's quad faces
+    //   either way depending on per-instance rotation)
+    // - alphaMode: ALPHA_COMBINE matches Three's standard transparent
+    //   blend; the splat fragment emits `vec4(rgb*a, a)` (premultiplied)
+    //   when PREMULTIPLIED_ALPHA is defined, which composites correctly
+    //   under either ALPHA_COMBINE or ALPHA_PREMULTIPLIED on Babylon
+    //   because the source factor on the premultiplied output already
+    //   bakes the alpha multiply. ALPHA_COMBINE is the safe default
+    //   since it matches what Three's transparent ShaderMaterial uses.
+    // - alpha < 1 forces Babylon's `needAlphaBlendingForMesh` heuristic
+    //   to keep the blend path on even if the `needAlphaBlending`
+    //   constructor flag is ignored on some pipelines.
+    this.material.disableDepthWrite = true;
+    this.material.backFaceCulling = false;
+    this.material.alphaMode = B.Constants.ALPHA_COMBINE;
+    this.material.alpha = 0.999;
   }
 
   dispose(): void {
