@@ -12,6 +12,13 @@ export {
   registerSparkBabylonShaderChunks,
   type BabylonShaderChunkHost,
 } from "./SparkBabylonShaderChunks";
+export {
+  SparkBabylonMaterial,
+  type BabylonMaterialHost,
+  type SparkBabylonMaterialOptions,
+  SPARK_BABYLON_UNIFORMS,
+  SPARK_BABYLON_SAMPLERS,
+} from "./SparkBabylonMaterial";
 
 /**
  * The Babylon entry points we need at runtime. Consumers pass these in
