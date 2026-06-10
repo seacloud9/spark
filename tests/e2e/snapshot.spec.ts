@@ -80,6 +80,24 @@ const NATIVE_BABYLON_SCENES = new Set<SceneName>([
   "debugColor",
   "viewer",
   "depthOfField",
+  "nonLod",
+  "glsl",
+  "dynamicLighting",
+  "extSplats",
+  "animatedWarp",
+  "splatDissolve",
+  "splatReveal",
+  "sogs",
+  // envMap deliberately excluded — the scene loads a rubberduck.glb
+  // through Three's GLTFLoader and parents it under the SparkRenderer's
+  // Three scene. In texture mode, SparkBabylonHost renders that whole
+  // Three scene (splats + duck) to its offscreen canvas and the Layer
+  // composites the result; the duck shows up. In native mode, only the
+  // SparkBabylonMesh draws into Babylon's framebuffer — non-splat Three
+  // objects are not bridged across. Native-mode parity for envMap
+  // would need a separate render path for non-splat Three meshes,
+  // which is out of scope for Phase D. The texture-mode capture
+  // (babylon-envMap.png) remains bit-perfect against Three.
 ]);
 
 async function diffParityPng(opts: {
