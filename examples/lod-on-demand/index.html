@@ -29,6 +29,7 @@
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
         "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
         "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
       }
     }
@@ -36,36 +37,22 @@
   <h2 id="overlay">Creating LoD splats...</h2>
   <script type="module">
     import * as THREE from "three";
-    import { SparkRenderer, SplatMesh, SparkControls, RgbaArray, dyno } from "@sparkjsdev/spark";
+    import { RgbaArray, SparkControls, SplatMesh } from "@sparkjsdev/spark";
     import GUI from "lil-gui";
     import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-    window.addEventListener('resize', onWindowResize, false);
-
-    const spark = new SparkRenderer({
-      renderer,
-      // Limit to 50K LoD splats so we can clearly see individual splats
-      lodSplatCount: 50000,
+    const env = await setupSparkExample({
+      cameraConfig: { fov: 75, near: 0.01, position: [0, 0, 0], lookAt: [0, 0, -1] },
+      sparkOptions: { lodSplatCount: 50000 },
     });
-    scene.add(spark);
 
     const url = await getAssetFileURL("woobles.spz");
     const splats = new SplatMesh({ url });
     splats.quaternion.set(1, 0, 0, 0);
     splats.position.set(0, -0.5, -2);
     splats.enableLod = false;
-    scene.add(splats);
+    env.add(splats);
 
     function newColors() {
       const modulate = new THREE.Color(Math.random(), Math.random(), Math.random());
@@ -83,9 +70,7 @@
 
     async function createLod() {
       const overlay = document.getElementById("overlay");
-      if (overlay.style.display) {
-        return;
-      }
+      if (overlay.style.display) return;
       overlay.style.display = "block";
       await splats.createLodSplats({ quality: false, rgbaArray: splats.splatRgba });
       overlay.style.display = "";
@@ -102,13 +87,12 @@
         alert("Create LoD splats first!");
       }
     });
-    gui.add(spark, "lodSplatCount", 10000, 600000, 10000).name("LoD splat count");
+    gui.add(env.spark, "lodSplatCount", 10000, 600000, 10000).name("LoD splat count");
 
-    const controls = new SparkControls({ canvas: renderer.domElement });
+    const controls = new SparkControls({ canvas: env.renderer.domElement });
 
-    renderer.setAnimationLoop(function animate(time) {
-      controls.update(camera);
-      renderer.render(scene, camera);
+    env.run(() => {
+      controls.update(env.camera);
     });
   </script>
 </body>

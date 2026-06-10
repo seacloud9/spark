@@ -17,6 +17,9 @@ const ENGINE_AWARE_EXAMPLES = [
   "procedural-splats",
   "dynamic-lighting",
   "envmap",
+  "lod",
+  "lod-on-demand",
+  "multi-lod",
 ];
 
 test("examples index shows engine-aware bullet for every ported example", async ({
