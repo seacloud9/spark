@@ -196,6 +196,44 @@ Verification (2026-06-09): targeted `pnpm exec playwright test tests/e2e/snapsho
 
 Full-matrix verification (2026-06-09, WSL+/mnt/c, all 19 scenes): **116/116 pass, 0 / 786432 pixels differ** on every pair. Wall time 1.8h. Capture timing envelope under WSL was meaningfully slower than native Windows (Babylon sogs 4.7m WSL vs 96s native; Babylon envMap 3.9m WSL vs 45.9s native — WSL pays a /mnt/c filesystem-bridge tax on top of the existing texture-bridge readPixels cost). Procedural scene timeout bumped from Playwright's 30s default → 90s in the same change to absorb vite's cold prebundle on the first test (axes/three) without flaking the run. Page-nav timeouts (`page.goto` `timeout`) cut from 240s / 180s → 90s / 60s for Babylon / Three+A-Frame network scenes — page nav is dominated by initial HTML/JS load, not splat decode (that's the data-ready wait). `test.setTimeout` and data-ready budgets kept where they are; per the plan's "shrink once CI has run cleanly a few times" gate, broader cuts wait for additional clean runs.
 
+### Phase G — Real A-Frame fixture via from-source build (≈ 4–6 commits, 1 session)
+
+**Problem.** Today's `aframe-${scene}` parity captures do not actually exercise A-Frame. The fixture (`tests/fixtures/snapshot-aframe.html`) constructs a structural mock of the AFRAME global (`registerSystem`, `registerComponent`, `THREE`) and hands Spark's own `THREE` to `registerSparkAFrame`. The render path that runs is "Spark Three through the A-Frame system/component lifecycle adapter" — bit-perfect against Three by construction. The mock proves:
+
+- `registerSparkAFrame` correctly registers the system + component on the supplied AFRAME-shaped surface.
+- The shader-chunk bridge mirrors `THREE.ShaderChunk` onto `AFRAME.THREE.ShaderChunk` (no-op when both share Three).
+- `SparkRenderer` mounts onto the scene root via `setObject3D` without identity errors.
+
+It does NOT prove:
+
+- A real `<a-scene>` element drives the lifecycle hooks in the order A-Frame guarantees.
+- A-Frame's component-update + DOM-attribute reflow path interacts cleanly with `SparkRenderer`'s `onBeforeRender` hot path.
+- The cross-namespace ShaderChunk bridge is even reachable in a real A-Frame app (it is — but the test never exercises it).
+
+The mock exists because A-Frame's npm and CDN builds both bake `super-three@0.173.x` into the bundle and there is no runtime patch to make A-Frame's bundle import Spark's `three@0.180`. Two THREE namespaces in one page break cross-namespace `WebGLRenderTarget` / `DataTexture` traffic; the only paths that work are (a) build A-Frame from source against shared Three, or (b) own the renderer/scene plumbing in the consuming app. The fixture takes path (b). Real consumers who want pixel parity take path (a).
+
+**Phase G goal.** Vendor a custom A-Frame build compiled against `peerDependencies: { three: ">=0.180" }`, add a third A-Frame fixture variant (`snapshot-aframe-real.html`) that loads it, and add e2e captures + parity assertions that exercise a real `<a-scene>`. Keeps the existing mock fixture (which proves the adapter wiring) — the new fixture proves real A-Frame integration.
+
+**Deliverables.**
+
+1. **Vendored A-Frame build under `tests/fixtures/aframe-real/`.** Recipe: clone `aframevr/aframe` at a known-good tag, set `super-three` to alias `three@0.180` via package.json `overrides` (or replace `aframe-master/src/lib/three.js` to re-export from shared `three`), run the rollup build, drop the resulting `aframe.min.js` into the fixtures dir. Commit only the built artefact, not the build tree. Document the recipe in a `tests/fixtures/aframe-real/REBUILD.md` so the next person can refresh the bundle when A-Frame upstream moves.
+
+2. **`tests/fixtures/snapshot-aframe-real.html`** — new fixture that loads the vendored bundle, builds a real `<a-scene>` element, registers Spark via `registerSparkAFrame(window.AFRAME, ...)`, attaches the scene's splat via the existing `<a-entity spark-splat="src: ...">` component for URL scenes or via direct `setObject3D` for procedural scenes (mirroring the existing `aframeMock.registerComponent` shape).
+
+3. **`tests/e2e/snapshot.spec.ts` — new test variant per scene**: `aframe-real-${scene}.png` capture + a `Three vs A-Frame real parity (${scene})` assertion at the same tolerance the mock currently uses (`0.01`). Starts on procedural scenes first; expands once those go green.
+
+4. **`src/backends/README.md` update.** Document the recipe and the gate's structural shape: mock fixture proves adapter wiring, real fixture proves the cross-namespace bridge actually fires inside a real A-Frame scene-render loop.
+
+5. **Rename or annotate `aframe-${scene}` artifacts.** Either rename the existing captures to `aframe-mock-${scene}` so it is visually obvious in the parity mosaic that two A-Frame paths are gated, or keep the name and add a `tmp/README.md` section that names the structural-mock-vs-real distinction. Either is fine; pick whichever produces less churn at the artifact-naming level.
+
+**Risks / open questions.**
+
+- A-Frame's source build may not accept a shared-Three override cleanly. Several A-Frame components (`tracked-controls`, `cursor`, etc.) call methods that may have been removed or renamed between super-three's pinned version and Three `0.180`. Likely need to either restrict the test scenes to ones that do not exercise those components, or carry small patches against the A-Frame source.
+- Bundle size — A-Frame's full build is ~1.5 MB. Vendoring it inflates the test-fixture directory. Acceptable on git but watch the LFS threshold.
+- If the from-source build proves too brittle to maintain, fall back to documenting "real A-Frame parity is a consumer responsibility" and remove the gate entirely. The mock fixture still serves as the adapter-wiring smoke.
+
+**Exit criteria.** All 19 matrix scenes pass `aframe-real-${scene}` ↔ `three-${scene}` parity within 1% tolerance, AND the mock fixture is renamed / annotated so the structural difference between the two A-Frame gates is unambiguous.
+
 ## Realistic effort summary
 
 | Phase | Scenes added | Commits | Sessions |
@@ -206,8 +244,9 @@ Full-matrix verification (2026-06-09, WSL+/mnt/c, all 19 scenes): **116/116 pass
 | D — Native Babylon material | 0 (unblocks scenes) | 5–10 | 1–2 |
 | E — Multi-pass + interactive | +10 | 6–8 | 1 |
 | F — Asset vendoring + CI hardening | 0 | 3–5 | 1 |
+| G — Real A-Frame fixture (from-source build) | 0 (proves existing) | 4–6 | 1 |
 
-Total: ~30 commits, 6–7 sessions to reach the AGENTS.md goal with the documented exceptions. The 4 XR/editor examples land as exception list entries in AGENTS.md.
+Total: ~34 commits, 7–8 sessions to reach the AGENTS.md goal with the documented exceptions. The 4 XR/editor examples land as exception list entries in AGENTS.md.
 
 ## Current state (2026-06-09, post Phase A)
 
