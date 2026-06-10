@@ -37,7 +37,7 @@ import {
 
 ## A-Frame
 
-A-Frame's npm and CDN builds both bake their own fork of Three.js
+A-Frame's package and CDN builds both bake their own fork of Three.js
 (`super-three@0.173.x`) into the dist bundle. There is no runtime path to
 make A-Frame's bundle import Spark's `three@0.180`; two Three namespaces
 in one page break cross-namespace `WebGLRenderTarget` / `DataTexture`
@@ -133,7 +133,7 @@ engine.runRenderLoop(async () => {
   call `host.renderOnce()` from `scene.onBeforeRenderObservable` or
   before each `scene.render()`.
 
-**What it does NOT buy and is deferred:**
+**Texture-mode trade-offs (still apply when staying on `mode: "texture"`):**
 
 - Babylon meshes cannot occlude or depth-sort against Spark splats —
   the splats are background-composited, not scene geometry.
@@ -141,10 +141,91 @@ engine.runRenderLoop(async () => {
   hot real-time multi-MSplat loops.
 - No native Babylon picking on splats.
 
-A native Babylon Spark material that draws splats inside the Babylon
-render pass closes those gaps. See AGENTS.md "Backend Visual Parity
-Goal" and the deep-research-report Babylon parity table for the planned
-rollout.
+These trade-offs are addressed by the native material path below.
+
+### Native mode (`mode: "native"`) — Babylon mesh occludes splats
+
+`SparkBabylonHost` accepts an opt-in `mode: "native"` option that
+swaps the texture-bridge `Layer` composite for a real Babylon
+`ShaderMaterial` on a Babylon `Mesh` inside the scene's render pass.
+Babylon depth-sorts the splat mesh against the rest of the scene by
+construction.
+
+```ts
+import {
+  Color4,
+  Constants,
+  Effect,
+  Engine,
+  Layer,
+  Matrix,
+  Mesh,
+  RawTexture,
+  RawTexture2DArray,
+  Scene,
+  ShaderMaterial,
+  Texture,
+  VertexData,
+} from "@babylonjs/core";
+import { babylon as sparkBabylon } from "@sparkjsdev/spark";
+
+const host = new sparkBabylon.SparkBabylonHost({
+  babylon: { RawTexture, Layer, Engine, Texture, Color4 },
+  babylonNative: {
+    Effect,
+    ShaderMaterial,
+    Mesh,
+    VertexData,
+    Matrix,
+    Constants,
+    RawTexture,
+    RawTexture2DArray,
+    Texture,
+    Engine,
+  },
+  mode: "native",
+  scene,
+  width: 1024,
+  height: 768,
+});
+```
+
+The `babylonNative` option carries the additional Babylon constructor
+surface (`Effect`, `ShaderMaterial`, `Mesh`, `VertexData`, `Matrix`,
+`Constants`, `RawTexture2DArray`) that the native material + mesh +
+texture bridge need at runtime. The `babylon` option still carries the
+texture-mode constructors; consumers staying on `mode: "texture"`
+don't need to import the extra symbols.
+
+`host.renderOnce()` in native mode drives `spark.update`, mirrors the
+ordering + accumulator textures from Three's GL onto Babylon-side
+`RawTexture` + `RawTexture2DArray` via direct `gl.readPixels` against
+a private framebuffer, syncs every uniform into the material, and sets
+`thinInstanceCount` to `spark.activeSplats`. No `readPixels` of the
+final framebuffer is needed — Babylon's render loop picks up the splat
+mesh as scene geometry.
+
+Working example at `examples/spark-babylon-native/`: a wireframe
+Babylon `TorusKnot` orbits in front of two `SplatMesh`es and the
+depth-sort interleaves the knot's edges with the splat fragments in
+real time.
+
+**Native-mode trade-offs:**
+
+- Non-splat Three meshes (GLBs etc.) parented under the
+  `SparkRenderer`'s Three scene do NOT render in Babylon's framebuffer
+  — only the splat mesh is bridged across. The `envMap` matrix scene
+  is the one excluded gate today; see the comment next to
+  `NATIVE_BABYLON_SCENES` in `tests/e2e/snapshot.spec.ts`.
+- Per-frame CPU readback of the accumulator textures is still on the
+  hot path. The shared-GL-context "Option B" eliminates it; that's a
+  follow-up when a Tier 6 scene's frame budget breaks.
+- Babylon's `setMatrix("projectionMatrix", ...)` uses the Three camera's
+  projection because Spark sorts against the Three camera. The
+  consumer is expected to mirror the Three camera's transform onto
+  the active Babylon camera each frame so Babylon's draw pass
+  composites the splat mesh consistently with the rest of the scene
+  (see the example for the recipe).
 
 ## Three host adapter
 
@@ -180,10 +261,13 @@ const { width, height } = adapter.getDrawingBufferSize();
 
 Every scene in `tests/fixtures/scenes.mjs` is rendered through all three
 backends by `tests/e2e/snapshot.spec.ts` and compared via `pixelmatch`.
-The matrix grows as new scenes land; tolerances are 1% for A-Frame and
-5% for Babylon. The Babylon tolerance bakes in headroom for the
-texture-bridge CPU round-trip and any sRGB / linear drift, and will
-tighten to 1% once the native Babylon material lands.
+Per-backend tolerances at the current matrix:
+
+| Backend | Tolerance | Notes |
+|---|---|---|
+| A-Frame | 1% | Bit-perfect via the structural mock fixture. Real `<a-scene>` gate tracked under Phase G of `MULTI-BACKEND-PARITY-PLAN.md`. |
+| Babylon (`mode: "texture"`, default) | 5% | Headroom for the CPU-readback round-trip and sRGB / linear drift the Layer composite introduces. |
+| Babylon (`mode: "native"`, opt-in) | 0.0001 (effectively bit-perfect) | 18 of 19 matrix scenes pass at 0 / 786432 pixels differ. `envMap` is the one excluded scene (non-splat Three mesh — see `NATIVE_BABYLON_SCENES` comment in the spec). |
 
 CI runs the matrix on every PR via `.github/workflows/ci-e2e.yml` and
 uploads `tmp/*.png` plus `tmp/parity-summary.json` as a downloadable
