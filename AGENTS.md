@@ -89,10 +89,10 @@ Key points:
 - Run `nvm use 20` before `pnpm` commands when working in WSL.
 - Use `pnpm` for dependency installs and package scripts.
 - On `/mnt/c`, use `pnpm run deps:install`; it installs with pnpm's virtual store under `~/ai-tools/spark-pnpm-store` to avoid rename permission errors on Windows-mounted filesystems.
-- Keep the repo `.npmrc` settings for WSL installs on `/mnt/c`.
+- Keep the repo install settings for WSL installs on `/mnt/c`.
 - Use native Windows tools only when the workflow specifically requires them, such as Godot `.exe` launches, Windows-only PowerShell scripts, or inspecting Windows-specific paths.
 - Keep command guidance aligned with the scripts defined in `package.json`.
-- Do not rewrite repository instructions around `npm` or `yarn` unless the repo itself changes.
+- Do not rewrite repository instructions around another package manager unless the repo itself changes.
 
 ## MemPalace Memory
 
@@ -122,6 +122,13 @@ Why this is a gate, not a polish item:
 - Spark is positioned as a single Gaussian-splat renderer that "just works" in the user's engine of choice. If a Babylon-hosted scene drifts visually from the Three-hosted equivalent of the same example, the product promise breaks.
 - Every example becomes a parity test asset. The Playwright per-backend screenshot suite is the gate: each example gets a baseline per backend, and CI fails on drift beyond the agreed pixel-diff tolerance.
 
+Current parity status (2026-06-10):
+
+- **Three.js (native)** — Spark's home environment. The parity baseline.
+- **A-Frame** — bit-perfect against Three on the entire matrix. NOTE: today's `aframe-${scene}` captures exercise `registerSparkAFrame` against a structural mock, NOT a real `<a-scene>`, because A-Frame's npm and CDN builds both bundle `super-three@0.173.x` (cross-namespace Three would break splat rendering). Phase G of `MULTI-BACKEND-PARITY-PLAN.md` tracks vendoring a from-source A-Frame build for a real-scene gate.
+- **Babylon — texture-bridge MVP (default)** — bit-perfect against Three on every matrix scene at the 5% tolerance the texture path was designed for. Splats composite as a background `Layer`; Babylon meshes cannot occlude them.
+- **Babylon — native material (opt-in via `mode: "native"`)** — bit-perfect (0 / 786432 pixels differ) against Three on 18/19 matrix scenes. Splats render as a real Babylon `Mesh` inside the scene's render pass; Babylon meshes depth-sort against splats by construction. See `examples/spark-babylon-native/` for a working demo. The one exclusion is `envMap` — its `rubberduck.glb` non-splat Three mesh doesn't bridge to Babylon's render pass in native mode; rationale and follow-up captured next to the `NATIVE_BABYLON_SCENES` set in `tests/e2e/snapshot.spec.ts`.
+
 How to apply this rule in day-to-day work:
 
 - The test fixture matrix (`?backend=three|aframe|babylon`, `?scene=<example-id>`) is mandatory. Do not ship a backend that cannot run the full example matrix.
@@ -129,6 +136,7 @@ How to apply this rule in day-to-day work:
 - Capability flags such as `nativeGaussianSplatting` route for performance, not as parity escape hatches. If Babylon's native splatting path drifts from the Spark Three path on any example, route that scene through Spark's custom-material Babylon path instead.
 - LoD policy, sort intervals, splat encoding ranges, color-space conversions, and modifier evaluation order must be parameter-identical across backends. Any per-backend tuning needed to maintain parity goes into the adapter, never into the core runtime.
 - A-Frame inherits parity for free as long as it stays a thin host adapter on the Three backend. Do not add A-Frame-only code paths that bypass the Three backend; any divergence breaks parity by construction.
+- For new Babylon scenes that need depth-sort against non-splat meshes, prefer the native material path (`mode: "native"`). Texture-mode is the safe default for consumers who only need splat-as-background.
 
 ## Commit Conventions
 
@@ -530,7 +538,7 @@ This comparison is grounded in Spark’s current use of Three render hooks, obje
 
 ### Current testing and CI baseline
 
-Today the repository’s tests are effectively limited to a single Node test asserting `floatToUint8`, and the two primary CI workflows on Linux and Windows run `npm install`, `npm run lint`, and `npm run test`. The package does not currently declare Playwright, and the main CI workflows do not exercise browser rendering or the Wasm build path even though the project has explicit `build:wasm` and `build` scripts. citeturn17view0turn16view0turn16view1turn44view0
+Today the repository’s tests are effectively limited to a single Node test asserting `floatToUint8`, and the two primary CI workflows on Linux and Windows run `pnpm install`, `pnpm run lint`, and `pnpm run test`. The package does not currently declare Playwright, and the main CI workflows do not exercise browser rendering or the Wasm build path even though the project has explicit `build:wasm` and `build` scripts. citeturn17view0turn16view0turn16view1turn44view0
 
 That is not enough for backend work. Multi-backend rendering changes need **browser-level behavior tests** and **visual regression tests**, because many failures will be semantic rather than type-level: wrong camera matrix, transparent pass order drift, incorrect render-target color space, LoD inconsistencies, or picking mismatches. Spark’s own examples already give you a ready-made scenario catalog for that test matrix. citeturn14view1turn27view0turn27view2turn32view3
 
@@ -583,7 +591,7 @@ export default defineConfig({
     }
   },
   webServer: {
-    command: "npm run build && npx vite preview --host 127.0.0.1 --port 4173",
+    command: "pnpm run build && pnpm exec vite preview --host 127.0.0.1 --port 4173",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env.CI
   },
@@ -662,22 +670,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install deps
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build Wasm
-        run: npm run build:wasm
+        run: pnpm run build:wasm
 
       - name: Build package
-        run: npm run build
+        run: pnpm run build
 
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Unit tests
-        run: npm run test
+        run: pnpm run test
 
   playwright:
     runs-on: ubuntu-latest
@@ -688,19 +696,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install deps
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Install browsers
-        run: npx playwright install --with-deps
+        run: pnpm exec playwright install --with-deps
 
       - name: Build Wasm
-        run: npm run build:wasm
+        run: pnpm run build:wasm
 
       - name: Run Playwright
-        run: npx playwright test
+        run: pnpm exec playwright test
 
       - name: Upload Playwright report
         if: always()
@@ -732,10 +740,10 @@ source "$HOME/.cargo/env"
 rustup target add wasm32-unknown-unknown
 cargo install wasm-pack
 
-npm ci
-npm run build:wasm
-npm run build
-npm start
+pnpm install --frozen-lockfile
+pnpm run build:wasm
+pnpm run build
+pnpm start
 ```
 
 Those commands match the repo’s own Wasm build expectations and Rust’s official WSL/Cargo install path. citeturn49view0turn48search0turn48search5turn48search1turn48search3
