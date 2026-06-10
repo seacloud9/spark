@@ -164,9 +164,10 @@ Shipped components (commit chain `b820092` → `9b08d03`):
 - `tests/fixtures/snapshot-babylon.html` + `tests/e2e/snapshot.spec.ts` — `?mode=native` URL param, native captures + bit-perfect parity assertions across the scenes in `NATIVE_BABYLON_SCENES`.
 
 Exit (achieved, exceeds planned):
-- **Babylon parity tolerance drops from 5% to bit-perfect** on every scene that has landed in `NATIVE_BABYLON_SCENES` (planned: 1%; actual: 0 / 786432 pixels differ).
-- 7 scenes ship at landing: `axes`, `grid`, `sphere`, `multi`, `tinted`, `helloWorld` (177K splats), `multipleSplats` (374K splats). Expansion to the rest of the matrix is a follow-up commit.
-- Tier 6 (multi-pass / multi-camera) becomes implementable on Babylon — the architectural unlock is in place. Phase E can start.
+- **Babylon parity tolerance drops from 5% to bit-perfect** on every scene in `NATIVE_BABYLON_SCENES` (planned: 1%; actual: 0 / 786432 pixels differ).
+- **18 of 19 matrix scenes** ship at bit-perfect parity: `axes`, `grid`, `sphere`, `multi`, `tinted`, `helloWorld`, `multipleSplats`, `debugColor`, `viewer`, `depthOfField`, `nonLod`, `glsl`, `dynamicLighting`, `extSplats`, `animatedWarp`, `splatDissolve`, `splatReveal`, `sogs`. The pipeline handles every Spark feature path in the catalogue — accumulator generation, sort, ordering upload, MRT extSplats output, dyno-driven shader chunks, time uniform, custom shader injection, SplatPager streaming, SOGS unpack.
+- `envMap` excluded with documented rationale: its rubberduck.glb non-splat Three mesh doesn't bridge to Babylon's native render pass (texture mode hides this behind the Layer composite). Bridging non-splat Three meshes is a separate native-mode feature, out of scope for Phase D.
+- Tier 6 (multi-pass / multi-camera) is implementable on Babylon — the architectural unlock is in place. Phase E can start.
 
 ### Phase E — Tier 6 multi-pass + Tier 7 interactive (≈ 6–8 commits, 1 session)
 
