@@ -40,52 +40,40 @@
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
         "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
         "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
       }
     }
   </script>
   <script type="module">
     import * as THREE from "three";
-    import { SparkRenderer, SplatMesh, SparkControls } from "@sparkjsdev/spark";
+    import { SplatMesh, SparkControls } from "@sparkjsdev/spark";
     import { getAssetFileURL } from "../js/get-asset-url.js";
     import { initMobileControls, getMobileInput, isMobileDevice } from "./mobile-joystick.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
-    // Scene setup
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    document.body.appendChild(renderer.domElement);
-
-    // Handle window resize
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+    const env = await setupSparkExample({
+      cameraConfig: { fov: 60, near: 0.1, position: [0, 0, 0], lookAt: [0, 0, -1] },
     });
 
-    // Camera control group
+    // Reparent env.camera into a cameraRig group so joystick / WASD
+    // translates the rig and SparkControls rotates the camera child.
+    // env.camera is the same Three camera the active host renders
+    // through, so reparenting it carries through to every backend.
     const cameraRig = new THREE.Group();
-    cameraRig.add(camera);
-    scene.add(cameraRig);
-
-    // Create Spark renderer (required for splats to render)
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
+    cameraRig.position.set(0, 1.6, 0);
+    env.scene.add(cameraRig);
+    cameraRig.add(env.camera);
 
     // Load the valley environment
     const splatURL = await getAssetFileURL("valley.spz");
     const splat = new SplatMesh({ url: splatURL });
     splat.quaternion.set(1, 0, 0, 0);
     splat.position.set(0, 0, -3);
-    scene.add(splat);
-
-    // Start position inside the valley
-    cameraRig.position.set(0, 1.6, 0);
+    env.add(splat);
 
     // Desktop controls (mouse/keyboard)
-    const controls = new SparkControls({ canvas: renderer.domElement });
+    const controls = new SparkControls({ canvas: env.renderer.domElement });
 
     // Mobile joystick
     const isMobile = isMobileDevice();
@@ -107,12 +95,7 @@
     // Movement settings
     const MOVE_SPEED = 2.0;
 
-    // Animation loop
-    let lastTime = performance.now();
-    renderer.setAnimationLoop(function animate(time) {
-      const deltaTime = (time - lastTime) / 1000;
-      lastTime = time;
-
+    env.run((time, deltaTime) => {
       // Update desktop controls (handles mouse look on both desktop & mobile)
       controls.update(cameraRig);
 
@@ -120,14 +103,15 @@
       if (isMobile) {
         const input = getMobileInput();
         if (input.x !== 0 || input.y !== 0) {
+          // deltaTime from env.run is in ms; convert to seconds for the
+          // 2.0 units/sec MOVE_SPEED below.
+          const dtSec = deltaTime / 1000;
           const move = new THREE.Vector3(input.x, 0, input.y);
-          move.multiplyScalar(MOVE_SPEED * deltaTime);
+          move.multiplyScalar(MOVE_SPEED * dtSec);
           move.applyQuaternion(cameraRig.quaternion);
           cameraRig.position.add(move);
         }
       }
-
-      renderer.render(scene, camera);
     });
   </script>
 </body>

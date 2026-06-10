@@ -23,6 +23,8 @@ const ENGINE_AWARE_EXAMPLES = [
   "sogs",
   "streaming-lod",
   "splat-transitions",
+  "mobile-joystick",
+  "splat-dissolve-effects",
 ];
 
 test("examples index shows engine-aware bullet for every ported example", async ({
