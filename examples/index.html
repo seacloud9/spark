@@ -436,7 +436,7 @@
               >
             </td>
           </tr>
-          <tr>
+          <tr class="engine-aware">
             <td class="name">splat-reveal-effects</td>
             <td class="desc">
               Per-splat reveal effects (Magic / Spread / Unroll / Twister
@@ -456,7 +456,7 @@
               >
             </td>
           </tr>
-          <tr>
+          <tr class="engine-aware">
             <td class="name">splat-shader-effects</td>
             <td class="desc">
               Fractal / movement shader effects on cat.spz.
@@ -755,10 +755,24 @@
             <td class="name">spark-babylon</td>
             <td class="desc">
               Standalone Babylon host demo using SparkBabylonHost
-              directly.
+              directly (texture-bridge MVP — splats composite as a
+              background Layer).
             </td>
             <td class="engines">
               <a class="babylon" href="./spark-babylon/">babylon</a>
+            </td>
+          </tr>
+          <tr>
+            <td class="name">spark-babylon-native</td>
+            <td class="desc">
+              SparkBabylonHost <code>mode: "native"</code> — splats
+              render as a real Babylon mesh inside the scene's render
+              pass, depth-sorting against a Babylon TorusKnot.
+            </td>
+            <td class="engines">
+              <a class="babylon" href="./spark-babylon-native/"
+                >babylon</a
+              >
             </td>
           </tr>
         </tbody>

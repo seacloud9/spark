@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spark · BabylonJS native material</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0a0d12;
+      }
+      #renderCanvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        touch-action: none;
+      }
+      .label {
+        position: absolute;
+        left: 16px;
+        top: 16px;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        color: #cdd4e0;
+        background: rgba(0, 0, 0, 0.4);
+        padding: 6px 10px;
+        border-radius: 4px;
+        pointer-events: none;
+        max-width: 60ch;
+        line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="renderCanvas"></canvas>
+    <div class="label">
+      Spark splats rendered as a real Babylon mesh inside the scene's render
+      pass. The wireframe TorusKnot is a regular Babylon mesh that
+      depth-sorts against the splats by construction — unlike the
+      texture-bridge MVP (<a
+        href="../spark-babylon/"
+        style="color: #8fb6ff"
+        >spark-babylon</a
+      >), the splats are not a background composite.
+    </div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../js/vendor/three/build/three.module.js",
+          "three/addons/": "../js/vendor/three/examples/jsm/",
+          "@sparkjsdev/spark": "../../dist/spark.module.js",
+          "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm"
+        }
+      }
+    </script>
+    <script type="module">
+      import {
+        ArcRotateCamera,
+        Color3,
+        Color4,
+        Constants,
+        Effect,
+        Engine,
+        Layer,
+        Matrix,
+        Mesh,
+        MeshBuilder,
+        RawTexture,
+        RawTexture2DArray,
+        Scene,
+        ShaderMaterial,
+        StandardMaterial,
+        Texture,
+        Vector3,
+        VertexData,
+      } from "@babylonjs/core";
+      import {
+        babylon as sparkBabylon,
+        constructAxes,
+        constructSpherePoints,
+        SplatMesh,
+      } from "@sparkjsdev/spark";
+
+      const canvas = document.querySelector("#renderCanvas");
+      const engine = new Engine(canvas, false, {
+        preserveDrawingBuffer: true,
+        stencil: false,
+      });
+
+      const scene = new Scene(engine);
+      scene.clearColor = new Color4(0x10 / 255, 0x15 / 255, 0x1c / 255, 1);
+
+      // Native mode draws the splat mesh through the active Babylon camera
+      // (unlike texture mode, where any FreeCamera satisfies the "scene
+      // needs a camera" guard and the splats come from a background
+      // Layer). An ArcRotateCamera gives the visitor an intuitive orbit
+      // control out of the box.
+      const camera = new ArcRotateCamera(
+        "camera",
+        Math.PI * 0.5 + 0.4,
+        Math.PI * 0.5 - 0.25,
+        2.8,
+        new Vector3(0, 0, 0),
+        scene,
+      );
+      camera.attachControl(canvas, true);
+      camera.minZ = 0.01;
+      camera.maxZ = 10;
+      camera.fov = 0.7853981633974483; // 45° to match the host's Three camera
+      camera.wheelDeltaPercentage = 0.02;
+
+      // SparkBabylonHost in native mode keeps the same setup as the texture
+      // path but also takes the fuller `babylonNative` Babylon constructor
+      // surface — Effect/ShaderMaterial/Mesh/VertexData/Matrix/Constants/
+      // RawTexture2DArray — that the native material+mesh+texture-bridge
+      // pieces need at runtime.
+      function makeHost() {
+        const size = sizeForCanvas();
+        const host = new sparkBabylon.SparkBabylonHost({
+          babylon: { RawTexture, Layer, Engine, Texture, Color4 },
+          babylonNative: {
+            Effect,
+            ShaderMaterial,
+            Mesh,
+            VertexData,
+            Matrix,
+            Constants,
+            RawTexture,
+            RawTexture2DArray,
+            Texture,
+            Engine,
+          },
+          mode: "native",
+          scene,
+          width: size.width,
+          height: size.height,
+          sparkRendererOptions: { enableLod: false, minSortIntervalMs: 0 },
+          clearColor: 0x10151c,
+        });
+        host.setCamera({
+          position: [camera.position.x, camera.position.y, camera.position.z],
+          lookAt: [
+            camera.target.x,
+            camera.target.y,
+            camera.target.z,
+          ],
+          fov: 45,
+          near: 0.01,
+          far: 10,
+        });
+        return host;
+      }
+
+      function sizeForCanvas() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        return {
+          width: Math.round(canvas.clientWidth * dpr),
+          height: Math.round(canvas.clientHeight * dpr),
+        };
+      }
+
+      let host = makeHost();
+
+      // Same splat scene as examples/spark-babylon — a rainbow sphere on
+      // the left and the RGB axes shifted right and forward so they
+      // overlap. The cross-mesh painter sort is identical to the texture-
+      // bridge path; native mode just routes the result through Babylon's
+      // render pass.
+      const sphere = new SplatMesh({
+        constructSplats: (splats) => {
+          constructSpherePoints({
+            splats,
+            radius: 0.55,
+            maxDepth: 2,
+            pointRadius: 0.045,
+            pointThickness: 0.006,
+            color: (color, point) =>
+              color.setRGB(
+                0.45 + 0.55 * point.x,
+                0.45 + 0.55 * point.y,
+                0.45 + 0.55 * point.z,
+              ),
+          });
+        },
+      });
+      sphere.position.set(-0.55, 0, 0);
+
+      const axes = new SplatMesh({
+        constructSplats: (splats) => {
+          constructAxes({
+            splats,
+            scale: 0.55,
+            axisRadius: 0.025,
+            axisShadowScale: 1.6,
+          });
+        },
+      });
+      axes.position.set(0.6, 0, 0.4);
+
+      await Promise.all([sphere.initialized, axes.initialized]);
+      host.add(sphere);
+      host.add(axes);
+
+      // A pure Babylon mesh — a wireframe TorusKnot floating in front of
+      // the splat sphere. The depth sort is real: orbit the camera and
+      // the knot passes in front of / behind the splats correctly,
+      // because the splat shader writes `gl_FragDepth` and Babylon's
+      // depth buffer holds both the splat depth AND the torus knot
+      // depth.
+      const torusKnot = MeshBuilder.CreateTorusKnot(
+        "torusKnot",
+        {
+          radius: 0.35,
+          tube: 0.05,
+          radialSegments: 96,
+          tubularSegments: 16,
+        },
+        scene,
+      );
+      torusKnot.position.set(-0.55, 0, 0);
+      const knotMaterial = new StandardMaterial("knotMat", scene);
+      knotMaterial.emissiveColor = new Color3(0.6, 0.85, 1.0);
+      knotMaterial.diffuseColor = new Color3(0.1, 0.1, 0.15);
+      knotMaterial.wireframe = true;
+      torusKnot.material = knotMaterial;
+
+      await scene.whenReadyAsync();
+
+      engine.runRenderLoop(async () => {
+        // Gentle rotation so the cross-mesh depth sort + the Babylon
+        // mesh occlusion are both visible without user input.
+        const t = performance.now() / 4000;
+        sphere.rotation.y = Math.sin(t) * 0.6;
+        axes.rotation.y = Math.cos(t * 0.8) * 0.5;
+        torusKnot.rotation.y = t * 0.7;
+        torusKnot.rotation.x = Math.sin(t * 0.5) * 0.3;
+
+        // Keep the internal Three camera in sync with the user-driven
+        // Babylon ArcRotateCamera so the splat-side projection math
+        // (which still runs against the Three camera) matches what
+        // Babylon's draw pass expects.
+        host.setCamera({
+          position: [camera.position.x, camera.position.y, camera.position.z],
+          lookAt: [camera.target.x, camera.target.y, camera.target.z],
+          fov: 45,
+          near: 0.01,
+          far: 10,
+        });
+
+        await host.renderOnce();
+        scene.render();
+      });
+
+      window.addEventListener("resize", () => {
+        // Rebuild the host at the new pixel size; same caveat as the
+        // texture-mode example — host.setSize is not in the API yet.
+        host.dispose();
+        host = makeHost();
+        host.add(sphere);
+        host.add(axes);
+        engine.resize();
+      });
+    </script>
+  </body>
+</html>
