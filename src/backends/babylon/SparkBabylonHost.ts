@@ -19,6 +19,11 @@ export {
   SPARK_BABYLON_UNIFORMS,
   SPARK_BABYLON_SAMPLERS,
 } from "./SparkBabylonMaterial";
+export {
+  SparkBabylonMesh,
+  type BabylonMeshHost,
+  type SparkBabylonMeshOptions,
+} from "./SparkBabylonMesh";
 
 /**
  * The Babylon entry points we need at runtime. Consumers pass these in
