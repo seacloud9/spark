@@ -103,11 +103,16 @@ async function diffParityPng(opts: {
 for (const scene of SCENES) {
   test.describe(`scene: ${scene}`, () => {
     test(`captures three-${scene}.png`, async ({ page }) => {
-      if (NETWORK_SCENES.has(scene)) {
-        test.setTimeout(360_000);
-      }
+      // Procedural scenes get 90s (not Playwright's default 30s) so the
+      // first scene in the run can absorb vite's cold prebundle without
+      // tripping the test timeout. NETWORK_SCENES still get 360s for
+      // URL-loaded splats.
+      test.setTimeout(NETWORK_SCENES.has(scene) ? 360_000 : 90_000);
+      // Page-nav timeout only covers initial HTML/JS fetch, not splat
+      // decode (that's the data-ready wait below). 60s is plenty even
+      // with cold vite prebundle.
       await page.goto(`/tests/fixtures/snapshot-three.html?scene=${scene}`, {
-        timeout: NETWORK_SCENES.has(scene) ? 180_000 : 30_000,
+        timeout: NETWORK_SCENES.has(scene) ? 60_000 : 30_000,
       });
       await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
         timeout: NETWORK_SCENES.has(scene) ? 240_000 : 60_000,
@@ -130,11 +135,9 @@ for (const scene of SCENES) {
     });
 
     test(`captures aframe-${scene}.png`, async ({ page }) => {
-      if (NETWORK_SCENES.has(scene)) {
-        test.setTimeout(360_000);
-      }
+      test.setTimeout(NETWORK_SCENES.has(scene) ? 360_000 : 90_000);
       await page.goto(`/tests/fixtures/snapshot-aframe.html?scene=${scene}`, {
-        timeout: NETWORK_SCENES.has(scene) ? 180_000 : 30_000,
+        timeout: NETWORK_SCENES.has(scene) ? 60_000 : 30_000,
       });
       await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
         timeout: NETWORK_SCENES.has(scene) ? 240_000 : 60_000,
@@ -163,7 +166,7 @@ for (const scene of SCENES) {
       // ExtSplats float32) push render time well past the 60s default.
       test.setTimeout(NETWORK_SCENES.has(scene) ? 540_000 : 180_000);
       await page.goto(`/tests/fixtures/snapshot-babylon.html?scene=${scene}`, {
-        timeout: NETWORK_SCENES.has(scene) ? 240_000 : 90_000,
+        timeout: NETWORK_SCENES.has(scene) ? 90_000 : 60_000,
       });
       await expect(page.locator("body")).toHaveAttribute("data-ready", "true", {
         timeout: NETWORK_SCENES.has(scene) ? 360_000 : 60_000,
