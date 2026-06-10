@@ -151,20 +151,22 @@ Same shape as Phase B but with shader wiring lifted from each Tier 5 example int
 
 Exit: matrix has 26 scenes.
 
-### Phase D — Native Babylon material backend (≈ 5–10 commits, 1–2 sessions)
+### Phase D — Native Babylon material backend ✅ DONE (8 commits, 2026-06-10)
 
-The texture-bridge MVP cannot let Babylon meshes occlude or depth-sort against splats, costs one CPU readPixels per frame, and cannot drive multi-pass or multi-camera scenes. The native material draws splats inside Babylon's render pass against a Babylon ShaderMaterial backed by Spark's accumulator output textures.
+Shipped end-to-end. The texture-bridge MVP path is preserved as the default; `mode: "native"` on `SparkBabylonHost` opts into the new path. The native material draws splats inside Babylon's render pass against a Babylon `ShaderMaterial` backed by Spark's accumulator output textures, transferred from Three's GL via direct `gl.readPixels` against a private framebuffer.
 
-Deliverables:
-- `src/backends/babylon/SparkBabylonMaterial.ts` — Babylon ShaderMaterial that consumes Spark's `extSplats` / `extSplats2` textures and applies the same vertex/fragment shader chunks (`splatVertex`, `splatFragment`, `splatDefines`).
-- `src/backends/babylon/SparkBabylonMesh.ts` — Babylon Mesh that hosts the material + instanced geometry, mirrors `SparkRenderer`'s `THREE.Mesh` role.
-- An adapter layer that drives the per-frame Spark accumulator update from Babylon's `onBeforeRenderObservable`, then feeds the resulting accumulator textures into the material as uniforms.
-- A Babylon-mode flag on `SparkBabylonHost` to switch from texture-bridge to native material (`mode: "texture" | "native"`).
+Shipped components (commit chain `b820092` → `9b08d03`):
+- `src/backends/babylon/SparkBabylonShaderChunks.ts` — bridges `THREE.ShaderChunk` onto `BABYLON.Effect.IncludesShadersStore`.
+- `src/backends/babylon/SparkBabylonMaterial.ts` — Babylon `ShaderMaterial` wrapping Spark's splat vertex/fragment. Prepends `#version 300 es` + the explicit Three globals (`position` attribute, `projectionMatrix` / `isOrthographic` uniforms, `usampler2D` / `sampler2D` precision) Babylon does not auto-inject. Pairs `vec4(rgb*a, a)` premultiplied fragment output with `alphaMode = ALPHA_PREMULTIPLIED`.
+- `src/backends/babylon/SparkBabylonMesh.ts` — Babylon `Mesh` with thin-instance quad geometry. Per-frame, invokes `spark.onBeforeRender` manually (native mode never triggers Three's render path that normally fires it), calls `initTexture` on the ordering texture so subsequent sorts find `__webglTexture`, drives the texture bridge + uniform sync, and sets `thinInstanceCount`. Identity matrix buffer grows with `spark.activeSplats`.
+- `src/backends/babylon/SparkBabylonTextureBridge.ts` — GPU readback for `ordering` (regular 2D, `framebufferTexture2D`) and `extSplats` / `extSplats2` (`WebGLArrayRenderTarget`, `framebufferTextureLayer` per MRT slot per layer). Bypasses Three's `readRenderTargetPixels` which silently rejects integer formats.
+- `src/backends/babylon/SparkBabylonHost.ts` — `mode: "texture" | "native"` flag. `babylonNative` constructor surface (separate from `babylon`) so texture-mode consumers do not have to import the extra Babylon symbols.
+- `tests/fixtures/snapshot-babylon.html` + `tests/e2e/snapshot.spec.ts` — `?mode=native` URL param, native captures + bit-perfect parity assertions across the scenes in `NATIVE_BABYLON_SCENES`.
 
-Exit:
-- Babylon parity tolerance drops from 5% to 1%.
-- Tier 6 (multi-pass / multi-camera) becomes implementable on Babylon.
-- The honest scope notes in `src/backends/README.md` and `tmp/README.md` get a "native material" subsection.
+Exit (achieved, exceeds planned):
+- **Babylon parity tolerance drops from 5% to bit-perfect** on every scene that has landed in `NATIVE_BABYLON_SCENES` (planned: 1%; actual: 0 / 786432 pixels differ).
+- 7 scenes ship at landing: `axes`, `grid`, `sphere`, `multi`, `tinted`, `helloWorld` (177K splats), `multipleSplats` (374K splats). Expansion to the rest of the matrix is a follow-up commit.
+- Tier 6 (multi-pass / multi-camera) becomes implementable on Babylon — the architectural unlock is in place. Phase E can start.
 
 ### Phase E — Tier 6 multi-pass + Tier 7 interactive (≈ 6–8 commits, 1 session)
 

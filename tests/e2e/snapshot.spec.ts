@@ -66,15 +66,17 @@ interface BackendSnapshotMeta {
 }
 
 // Phase D: scenes the native-mode Babylon path is asserted across.
-// Start with the procedural scenes (no network, no LoD, no animations) so
-// the first native-mode validation surface is the most predictable. Add
-// URL scenes as they pass the texture-vs-native parity gate.
+// Procedural scenes (no network, no LoD, no animations) ship at bit-perfect
+// parity from the start. URL-loaded scenes get added incrementally as
+// they're verified.
 const NATIVE_BABYLON_SCENES = new Set<SceneName>([
   "axes",
   "grid",
   "sphere",
   "multi",
   "tinted",
+  "helloWorld",
+  "multipleSplats",
 ]);
 
 async function diffParityPng(opts: {
