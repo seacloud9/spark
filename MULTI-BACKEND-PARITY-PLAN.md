@@ -192,6 +192,8 @@ Remaining for Phase F:
 - Tighten the Babylon network-scene timeout budget. Current limit (test 540s, goto 240s, data-ready 360s) was sized for cold-cache CDN fetches; with vendored assets every scene completes well inside that envelope. Shrink to roughly the procedural-scene budget once CI has run cleanly on vendored assets a few times.
 - Add a `git lfs` migration step if the vendored directory grows past ~100 MB.
 
+Verification (2026-06-09): targeted `pnpm exec playwright test tests/e2e/snapshot.spec.ts -g "depthOfField|dynamicLighting|envMap|sogs"` — 24/24 pass, **0 / 786432 pixels differ** on every three↔aframe and three↔babylon comparison. Capture timings, three / aframe / babylon: depthOfField (valley.spz vendored) 11.8s / 6.1s / 27.1s; dynamicLighting (fireplace.spz vendored) 4.1s / 4.1s / 17.4s; envMap (fireplace.spz + rubberduck.glb vendored) 23.0s / 23.0s / 45.9s; sogs (sutro.zip CDN) 25.9s / 22.4s / 96s. Babylon-sogs is the long pole (sutro.zip download + SOGS fflate decode + texture-bridge readPixels overhead, all from a CDN-served zip) but lands well inside the 360s data-ready budget — no need to vendor sutro.zip ahead of the LFS migration.
+
 ## Realistic effort summary
 
 | Phase | Scenes added | Commits | Sessions |
