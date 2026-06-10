@@ -210,15 +210,26 @@ export class SparkBabylonMesh {
       camera: this.threeCamera,
     });
     // Native mode never calls `threeRenderer.render(scene, camera)` —
-    // Babylon owns the visible draw pass. But SparkRenderer's
-    // `driveSort` (SparkRenderer.ts L548) expects
-    // `renderer.properties.get(orderingTexture).__webglTexture` to
-    // exist on its second-and-later sort, which Three only lazily
-    // allocates when the texture is bound during a render. Force Three
-    // to upload the ordering texture each sync so the next sort's
-    // `texSubImage2D` path finds the GL handle instead of throwing
-    // "ordering texture not found". Same applies to the accumulator
-    // target textures the bridge reads back below.
+    // Babylon owns the visible draw pass. That means:
+    //   1. SparkRenderer.onBeforeRender (the hook Three fires per
+    //      render that populates renderToView{Quat,Pos,Basis} from
+    //      the camera matrix, renderSize, near/far, and every other
+    //      per-frame uniform) NEVER FIRES. Without this every uniform
+    //      stays at its makeUniforms default — the splat shader sees
+    //      renderToViewPos = (0,0,0) and projects every splat behind
+    //      the camera. Invoke it manually here.
+    //   2. SparkRenderer's `driveSort` (SparkRenderer.ts L548) expects
+    //      `renderer.properties.get(orderingTexture).__webglTexture`
+    //      to exist on its second-and-later sort, which Three only
+    //      lazily allocates when the texture is bound during a render.
+    //      Force the upload via `initTexture`.
+    // Both calls are no-ops in texture mode (which IS rendering through
+    // Three), so they can stay here for the shared host path.
+    this.sparkRenderer.onBeforeRender(
+      this.sparkRenderer.renderer,
+      this.threeScene,
+      this.threeCamera,
+    );
     if (this.sparkRenderer.orderingTexture) {
       this.sparkRenderer.renderer.initTexture(
         this.sparkRenderer.orderingTexture,

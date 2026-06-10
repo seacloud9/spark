@@ -308,28 +308,20 @@ for (const scene of SCENES) {
         }
       });
 
-      // KNOWN BROKEN: native-mode splats currently render fully
-      // transparent — the bridge transfers integer-format extSplats
-      // textures correctly (verified during commit 6 debug — readback
-      // returns real packed splat data), the shader compiles after
-      // the preamble fix, thinInstanceCount grows with the matrix
-      // buffer, and Babylon draws N quads. The remaining issue is
-      // most likely that `spark.orderingTexture.image.data` is the
-      // FIRST frame's `result.ordering` only — SparkRenderer updates
-      // the GPU directly via `texSubImage2D` on subsequent frames
-      // (SparkRenderer.ts L1084) and does not refresh the
-      // `THREE.DataTexture` CPU buffer the bridge currently reads.
-      // The capture test runs and the diff PNG is generated for
-      // review, but the equality assertion is fixme'd until the
-      // ordering bridge reads from the GPU (mirroring the
-      // extSplats path).
-      test.fixme(`Three vs Babylon native parity (${scene})`, async () => {
+      test(`Three vs Babylon native parity (${scene})`, async () => {
+        // Native mode renders bit-perfect against Three on every
+        // procedural scene at landing. The PHASE-D-DESIGN.md promise
+        // was "tighten from 5% to 1%"; the actual landing tightens
+        // to effectively zero. Keep a sub-pixel floor for capture
+        // noise; bump back up if a future scene legitimately needs
+        // headroom (in which case prefer a per-scene tolerance map
+        // over a global loosening).
         await diffParityPng({
           baseline: `three-${scene}.png`,
           candidate: `babylon-native-${scene}.png`,
           diffOut: `parity-babylon-native-${scene}.png`,
           label: `three vs babylon-native / ${scene}`,
-          tolerance: 0.05,
+          tolerance: 0.0001,
         });
       });
     }
