@@ -11,13 +11,19 @@ import type {
   BabylonMaterialHost,
   SparkBabylonMaterial,
 } from "./SparkBabylonMaterial";
+import {
+  type BabylonTextureBridgeHost,
+  SparkBabylonTextureBridge,
+} from "./SparkBabylonTextureBridge";
 
 /**
  * Babylon constructors the mesh needs at runtime. Extends
  * {@link BabylonMaterialHost} so the mesh can be constructed against a
  * single host object shared with its material.
  */
-export interface BabylonMeshHost extends BabylonMaterialHost {
+export interface BabylonMeshHost
+  extends BabylonMaterialHost,
+    BabylonTextureBridgeHost {
   Mesh: new (name: string, scene: BabylonScene) => BabylonMesh;
   VertexData: new () => BabylonVertexData;
   Matrix: {
@@ -110,6 +116,7 @@ export class SparkBabylonMesh {
     | THREE.PerspectiveCamera
     | THREE.OrthographicCamera;
   private readonly material: SparkBabylonMaterial;
+  private readonly textureBridge: SparkBabylonTextureBridge;
   private readonly projectionMatrixScratch: BabylonMatrix;
 
   private observer: Observer<BabylonScene> | null = null;
@@ -120,6 +127,11 @@ export class SparkBabylonMesh {
     this.threeScene = options.threeScene;
     this.threeCamera = options.threeCamera;
     this.material = options.material;
+    this.textureBridge = new SparkBabylonTextureBridge({
+      babylon: B,
+      scene: options.scene,
+      sparkRenderer: options.sparkRenderer,
+    });
 
     this.mesh = new B.Mesh(options.name ?? "sparkSplatMesh", options.scene);
 
@@ -177,8 +189,30 @@ export class SparkBabylonMesh {
       scene: this.threeScene,
       camera: this.threeCamera,
     });
+    // Mirror the Three-side ordering + accumulator textures onto the
+    // Babylon-side material samplers. See SparkBabylonTextureBridge
+    // for the Three→Babylon transfer details (CPU mirror for ordering,
+    // gl.readRenderTargetPixels per layer for the MRT extSplats pair).
+    this.textureBridge.syncOnce();
+    this.bindBridgeTextures();
     this.syncUniforms();
     this.mesh.thinInstanceCount = this.sparkRenderer.activeSplats;
+  }
+
+  private bindBridgeTextures(): void {
+    const m = this.material.material;
+    const ordering = this.textureBridge.orderingTexture;
+    const extSplats = this.textureBridge.extSplatsTexture;
+    const extSplats2 = this.textureBridge.extSplats2Texture;
+    if (ordering) {
+      m.setTexture("ordering", ordering);
+    }
+    if (extSplats) {
+      m.setTexture("extSplats", extSplats);
+    }
+    if (extSplats2) {
+      m.setTexture("extSplats2", extSplats2);
+    }
   }
 
   private syncUniforms(): void {
@@ -237,6 +271,7 @@ export class SparkBabylonMesh {
 
   dispose(): void {
     this.detach();
+    this.textureBridge.dispose();
     this.mesh.dispose();
   }
 }

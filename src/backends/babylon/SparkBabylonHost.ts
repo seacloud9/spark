@@ -24,6 +24,11 @@ export {
   type BabylonMeshHost,
   type SparkBabylonMeshOptions,
 } from "./SparkBabylonMesh";
+export {
+  SparkBabylonTextureBridge,
+  type BabylonTextureBridgeHost,
+  type SparkBabylonTextureBridgeOptions,
+} from "./SparkBabylonTextureBridge";
 
 /**
  * The Babylon entry points we need at runtime. Consumers pass these in
