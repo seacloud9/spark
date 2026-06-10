@@ -165,7 +165,7 @@ Shipped components (commit chain `b820092` → `9b08d03`):
 
 Exit (achieved, exceeds planned):
 - **Babylon parity tolerance drops from 5% to bit-perfect** on every scene in `NATIVE_BABYLON_SCENES` (planned: 1%; actual: 0 / 786432 pixels differ).
-- **18 of 19 matrix scenes** ship at bit-perfect parity: `axes`, `grid`, `sphere`, `multi`, `tinted`, `helloWorld`, `multipleSplats`, `debugColor`, `viewer`, `depthOfField`, `nonLod`, `glsl`, `dynamicLighting`, `extSplats`, `animatedWarp`, `splatDissolve`, `splatReveal`, `sogs`. The pipeline handles every Spark feature path in the catalogue — accumulator generation, sort, ordering upload, MRT extSplats output, dyno-driven shader chunks, time uniform, custom shader injection, SplatPager streaming, SOGS unpack.
+- **19 of 20 matrix scenes** ship at bit-perfect parity: `axes`, `grid`, `sphere`, `multi`, `tinted`, `helloWorld`, `multipleSplats`, `debugColor`, `viewer`, `depthOfField`, `nonLod`, `glsl`, `dynamicLighting`, `extSplats`, `animatedWarp`, `splatDissolve`, `splatReveal`, `sogs`, `raycasting` (the first Tier 7 scene). The pipeline handles every Spark feature path in the catalogue — accumulator generation, sort, ordering upload, MRT extSplats output, dyno-driven shader chunks, time uniform, custom shader injection, SplatPager streaming, SOGS unpack, multi-instance SplatMesh groups.
 - `envMap` excluded with documented rationale: its rubberduck.glb non-splat Three mesh doesn't bridge to Babylon's native render pass (texture mode hides this behind the Layer composite). Bridging non-splat Three meshes is a separate native-mode feature, out of scope for Phase D.
 - Tier 6 (multi-pass / multi-camera) is implementable on Babylon — the architectural unlock is in place. Phase E can start.
 
