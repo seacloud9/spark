@@ -40,6 +40,7 @@ const VENDORED_ASSETS = new Set([
   "fireplace.spz",
   "valley.spz",
   "robot-head.spz",
+  "penguin.spz",
   // sutro.zip is 26 MB and the vite dev server hangs serving it for
   // long enough that the SOGS decode never completes inside the
   // network-scene timeout budget. Vendor it via a separate static
