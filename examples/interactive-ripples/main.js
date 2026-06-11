@@ -1,47 +1,23 @@
-import {
-  SparkControls,
-  SparkRenderer,
-  SplatMesh,
-  dyno,
-} from "@sparkjsdev/spark";
+import { SparkControls, SplatMesh, dyno } from "@sparkjsdev/spark";
 import * as THREE from "three";
 import { getAssetFileURL } from "/examples/js/get-asset-url.js";
+import { setupSparkExample } from "/examples/js/spark-engine.js";
 
-const canvas = document.getElementById("canvas");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
-renderer.setClearColor(0x000000, 1);
+const env = await setupSparkExample({
+  cameraConfig: {
+    fov: 50,
+    near: 0.01,
+    far: 2000,
+    position: [0, 0, 3],
+    lookAt: [0, 0, 0],
+  },
+  clearColor: 0x000000,
+});
 
-const scene = new THREE.Scene();
-const spark = new SparkRenderer({ renderer });
-scene.add(spark);
+const controls = new SparkControls({ canvas: env.canvas });
+controls.fpsMovement.enable = true;
+controls.pointerControls.enable = true;
 
-const camera = new THREE.PerspectiveCamera(
-  50,
-  canvas.clientWidth / canvas.clientHeight,
-  0.01,
-  2000,
-);
-camera.position.set(0, 0, 3);
-camera.lookAt(0, 0, 0);
-scene.add(camera);
-
-function handleResize() {
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
-window.addEventListener("resize", handleResize);
-
-// Camera controls with mouse and WASD enabled
-const controls = new SparkControls({ canvas: renderer.domElement });
-controls.fpsMovement.enable = true; // Enable WASD movement
-controls.pointerControls.enable = true; // Enable mouse controls
-
-// Dyno shader with time and shockwave function
 function passthroughDyno(timeUniform, hitpointUniform) {
   return dyno.dynoBlock(
     { gsplat: dyno.Gsplat },
@@ -66,7 +42,7 @@ function passthroughDyno(timeUniform, hitpointUniform) {
              vec3 direction = center - hitpoint;
              float distance = length(direction);
              float wave = sin(t*4.-distance*5.)*exp(-t*.7)*smoothstep(t*2.,0.,distance);
-             float brightness = pow(abs(wave),3.) * 10.; // Increase brightness on wave crests
+             float brightness = pow(abs(wave),3.) * 10.;
              rgba.rgb += brightness;
              return rgba;
            }
@@ -75,9 +51,7 @@ function passthroughDyno(timeUniform, hitpointUniform) {
         statements: ({ inputs, outputs }) =>
           dyno.unindentLines(`
           ${outputs.gsplat} = ${inputs.gsplat};
-          // Apply shockwave function to position
           ${outputs.gsplat}.center = shockwave(${inputs.gsplat}.center, ${inputs.time}, ${inputs.hitpoint});
-          // Apply shockwave function to color
           ${outputs.gsplat}.rgba = shockwaveColor(${inputs.gsplat}.rgba, ${inputs.gsplat}.center, ${inputs.time}, ${inputs.hitpoint});
         `),
       });
@@ -92,65 +66,50 @@ function passthroughDyno(timeUniform, hitpointUniform) {
   );
 }
 
-async function run() {
-  // Time and hitpoint uniforms for dyno shader
-  const timeUniform = dyno.dynoFloat(0.0);
-  const hitpointUniform = dyno.dynoVec3(new THREE.Vector3(0, 0, 1000)); // Initialize far away to avoid initial effect
+const timeUniform = dyno.dynoFloat(0.0);
+const hitpointUniform = dyno.dynoVec3(new THREE.Vector3(0, 0, 1000));
 
-  // Load valley.spz
-  const splatURL = await getAssetFileURL("valley.spz");
-  const valley = new SplatMesh({ url: splatURL });
-  await valley.initialized;
+const splatURL = await getAssetFileURL("valley.spz");
+const valley = new SplatMesh({ url: splatURL });
+await valley.initialized;
 
-  // Fix orientation - rotate 180 degrees around X axis
-  valley.rotateX(Math.PI);
+valley.rotateX(Math.PI);
 
-  // Apply dyno shader with time and hitpoint uniforms
-  valley.objectModifier = passthroughDyno(timeUniform, hitpointUniform);
-  valley.updateGenerator();
+valley.objectModifier = passthroughDyno(timeUniform, hitpointUniform);
+valley.updateGenerator();
 
-  scene.add(valley);
+env.add(valley);
 
-  // Raycaster for click detection
-  const raycaster = new THREE.Raycaster();
-  raycaster.params.Points = { threshold: 1.0 }; // Increased threshold for better hit detection
+const raycaster = new THREE.Raycaster();
+raycaster.params.Points = { threshold: 1.0 };
 
-  // Simple time counter that resets on click
-  let timeCounter = 0;
+let timeCounter = 0;
 
-  // Click event listener to set hitpoint and reset time
-  renderer.domElement.addEventListener("pointerdown", (event) => {
-    const rect = renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1,
-    );
-    raycaster.setFromCamera(ndc, camera);
-    const hits = raycaster.intersectObject(valley, false);
-    const hit = hits?.length ? hits[0] : null;
+// Click events bind to env.canvas (the visible top-of-DOM canvas) so the
+// raycast works regardless of whether we're on Three's renderer canvas or
+// Babylon's engine canvas.
+env.canvas.addEventListener("pointerdown", (event) => {
+  const rect = env.canvas.getBoundingClientRect();
+  const ndc = new THREE.Vector2(
+    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+    -((event.clientY - rect.top) / rect.height) * 2 + 1,
+  );
+  raycaster.setFromCamera(ndc, env.camera);
+  const hits = raycaster.intersectObject(valley, false);
+  const hit = hits?.length ? hits[0] : null;
 
-    if (!hit) {
-      return;
-    }
+  if (!hit) {
+    return;
+  }
 
-    const localPoint = valley.worldToLocal(hit.point.clone());
-    // Don't invert Y or Z - keep original coordinates
+  const localPoint = valley.worldToLocal(hit.point.clone());
+  hitpointUniform.value.copy(localPoint);
+  timeCounter = 0;
+});
 
-    hitpointUniform.value.copy(localPoint);
-    timeCounter = 0; // Reset time counter
-  });
-
-  renderer.setAnimationLoop((timeMs) => {
-    // Increment time counter each frame
-    timeCounter += 0.016; // ~60fps increment
-    timeUniform.value = timeCounter;
-
-    // Update dyno uniforms to propagate to the mesh each frame
-    valley.updateVersion();
-
-    controls.update(camera);
-    renderer.render(scene, camera);
-  });
-}
-
-run();
+env.run(() => {
+  timeCounter += 0.016;
+  timeUniform.value = timeCounter;
+  valley.updateVersion();
+  controls.update(env.camera);
+});

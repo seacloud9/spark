@@ -1,28 +1,19 @@
-import { SparkRenderer, SplatMesh, dyno } from "@sparkjsdev/spark";
+import { SplatMesh, dyno } from "@sparkjsdev/spark";
 import { GUI } from "lil-gui";
 import * as THREE from "three";
 import { getAssetFileURL } from "/examples/js/get-asset-url.js";
+import { setupSparkExample } from "/examples/js/spark-engine.js";
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(
-  60,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1000,
-);
-const renderer = new THREE.WebGLRenderer({ antialias: false });
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-const spark = new SparkRenderer({ renderer });
-scene.add(spark);
-
-window.addEventListener("resize", onWindowResize, false);
-function onWindowResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
+const env = await setupSparkExample({
+  cameraConfig: {
+    fov: 60,
+    near: 0.1,
+    far: 1000,
+    position: [0, 3, 5.5],
+    lookAt: [0, 1, 0],
+  },
+});
+const camera = env.camera;
 
 let rotationAngle = 0;
 let zoomDistance = 5.5;
@@ -30,9 +21,6 @@ const minZoom = 1;
 const maxZoom = 20;
 const rotationSpeed = 0.02;
 const zoomSpeed = 0.1;
-
-camera.position.set(0, 3, zoomDistance);
-camera.lookAt(0, 1, 0);
 
 const keys = {};
 window.addEventListener("keydown", (event) => {
@@ -173,7 +161,7 @@ async function loadSplat() {
   splatMesh = new SplatMesh({ url: splatURL });
   splatMesh.quaternion.set(1, 0, 0, 0);
   splatMesh.position.set(0, 0, 0);
-  scene.add(splatMesh);
+  env.add(splatMesh);
 
   await splatMesh.initialized;
 
@@ -185,9 +173,11 @@ loadSplat().catch((error) => {
   console.error("Error loading splat:", error);
 });
 
-// Convert mouse coordinates to normalized device coordinates
+// Convert mouse coordinates to normalized device coordinates.
+// Uses env.canvas (the visible top-of-DOM canvas) so coords are accurate
+// across engines — env.renderer.domElement is offscreen in babylon mode.
 function getMouseNDC(event) {
-  const rect = renderer.domElement.getBoundingClientRect();
+  const rect = env.canvas.getBoundingClientRect();
   return new THREE.Vector2(
     ((event.clientX - rect.left) / rect.width) * 2 - 1,
     -((event.clientY - rect.top) / rect.height) * 2 + 1,
@@ -208,7 +198,7 @@ function getHitPoint(ndc) {
 let dragStartNDC = null;
 let dragScale = 1.0;
 
-renderer.domElement.addEventListener("pointerdown", (event) => {
+env.canvas.addEventListener("pointerdown", (event) => {
   if (!splatMesh) return;
 
   const ndc = getMouseNDC(event);
@@ -237,7 +227,7 @@ renderer.domElement.addEventListener("pointerdown", (event) => {
   }
 });
 
-renderer.domElement.addEventListener("pointermove", (event) => {
+env.canvas.addEventListener("pointermove", (event) => {
   if (!isDragging || !splatMesh || !dragStartPoint || !dragStartNDC) return;
 
   const ndc = getMouseNDC(event);
@@ -262,7 +252,7 @@ renderer.domElement.addEventListener("pointermove", (event) => {
   dragDisplacement.value.copy(worldDisplacement);
 });
 
-renderer.domElement.addEventListener("pointerup", (event) => {
+env.canvas.addEventListener("pointerup", (event) => {
   if (!isDragging) return;
 
   isDragging = false;
@@ -280,8 +270,7 @@ renderer.domElement.addEventListener("pointerup", (event) => {
   dragStartNDC = null;
 });
 
-renderer.setAnimationLoop(() => {
-  // Update bounce animation
+env.run(() => {
   if (isBouncing) {
     bounceTime.value += 0.1;
     if (splatMesh) {
@@ -289,22 +278,11 @@ renderer.setAnimationLoop(() => {
     }
   }
 
-  // Keyboard controls
-  if (keys.a) {
-    rotationAngle -= rotationSpeed;
-  }
-  if (keys.d) {
-    rotationAngle += rotationSpeed;
-  }
+  if (keys.a) rotationAngle -= rotationSpeed;
+  if (keys.d) rotationAngle += rotationSpeed;
+  if (keys.w) zoomDistance = Math.max(minZoom, zoomDistance - zoomSpeed);
+  if (keys.s) zoomDistance = Math.min(maxZoom, zoomDistance + zoomSpeed);
 
-  if (keys.w) {
-    zoomDistance = Math.max(minZoom, zoomDistance - zoomSpeed);
-  }
-  if (keys.s) {
-    zoomDistance = Math.min(maxZoom, zoomDistance + zoomSpeed);
-  }
-
-  // Update camera orbit
   camera.position.x = Math.sin(rotationAngle) * zoomDistance;
   camera.position.z = Math.cos(rotationAngle) * zoomDistance;
   camera.position.y = 3;
@@ -313,6 +291,4 @@ renderer.setAnimationLoop(() => {
   if (splatMesh) {
     splatMesh.updateVersion();
   }
-
-  renderer.render(scene, camera);
 });

@@ -23,8 +23,17 @@
   </style>
   </head>
   <body>
-    <canvas id="canvas"></canvas>
     <div class="legend">Click to generate ripples • WASD + Mouse to move camera</div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../js/vendor/three/build/three.module.js",
+          "three/addons/": "../js/vendor/three/examples/jsm/",
+          "@sparkjsdev/spark": "../../dist/spark.module.js",
+          "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm"
+        }
+      }
+    </script>
     <script type="module" src="./main.js"></script>
   </body>
 </html>

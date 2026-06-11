@@ -31,6 +31,8 @@ const ENGINE_AWARE_EXAMPLES = [
   "particle-animation",
   "particle-simulation",
   "splat-flow",
+  "interactive-ripples",
+  "interactive-deform",
 ];
 
 test("examples index shows engine-aware bullet for every ported example", async ({
