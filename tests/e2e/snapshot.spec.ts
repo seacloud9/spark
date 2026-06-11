@@ -33,6 +33,7 @@ const SCENES = [
   "animatedWarp",
   "envMap",
   "raycasting",
+  "interactiveDeform",
   "interactiveRipples",
 ] as const;
 type SceneName = (typeof SCENES)[number];
@@ -57,6 +58,7 @@ const NETWORK_SCENES = new Set<SceneName>([
   "animatedWarp",
   "envMap",
   "raycasting",
+  "interactiveDeform",
   "interactiveRipples",
 ]);
 
@@ -93,6 +95,7 @@ const NATIVE_BABYLON_SCENES = new Set<SceneName>([
   "splatReveal",
   "sogs",
   "raycasting",
+  "interactiveDeform",
   "interactiveRipples",
   // envMap deliberately excluded — the scene loads a rubberduck.glb
   // through Three's GLTFLoader and parents it under the SparkRenderer's

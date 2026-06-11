@@ -987,6 +987,101 @@ export const SCENES = {
     clearColor: 0x1b2037,
     build: buildEnvMap,
   },
+  interactiveDeform: {
+    // Mirrors the static initial-frame of examples/interactive-deform/ —
+    // penguin.spz under the dragBounce dyno modifier with
+    // `dragActive = 0` (which gates the entire drag-displacement
+    // branch via the `if (dragActive > 0.5)` runtime check) and
+    // `bounceBaseDisplacement = (0,0,0)` (which zeroes the elastic
+    // bounce offset regardless of time / dragRadius). The modifier
+    // runs through every backend's gen pass but produces byte-
+    // identical output to a pure passthrough.
+    camera: {
+      position: [0, 3, 5.5],
+      lookAt: [0, 1, 0],
+      fov: 60,
+      near: 0.1,
+      far: 1000,
+    },
+    clearColor: 0x000000,
+    build: async () => {
+      const penguin = new SplatMesh({ url: splatUrl("penguin.spz") });
+      await penguin.initialized;
+      penguin.quaternion.set(1, 0, 0, 0);
+
+      // Lift the example's dragBounce shader as-is. `inputs` carry
+      // the 8 control uniforms; with the initial-state values below,
+      // both displacement branches collapse to zero so the splat
+      // centers exit the modifier unchanged.
+      const dragPoint = dyno.dynoVec3(new THREE.Vector3(0, 0, 0));
+      const dragDisplacement = dyno.dynoVec3(new THREE.Vector3(0, 0, 0));
+      const dragRadius = dyno.dynoFloat(0.5);
+      const dragActive = dyno.dynoFloat(0.0);
+      const bounceTime = dyno.dynoFloat(0.0);
+      const bounceBaseDisplacement = dyno.dynoVec3(new THREE.Vector3(0, 0, 0));
+      const dragIntensity = dyno.dynoFloat(5.0);
+      const bounceAmount = dyno.dynoFloat(0.5);
+      const bounceSpeed = dyno.dynoFloat(0.5);
+
+      penguin.worldModifier = dyno.dynoBlock(
+        { gsplat: dyno.Gsplat },
+        { gsplat: dyno.Gsplat },
+        ({ gsplat }) => {
+          const shader = new dyno.Dyno({
+            inTypes: {
+              gsplat: dyno.Gsplat,
+              dragPoint: "vec3",
+              dragDisplacement: "vec3",
+              dragRadius: "float",
+              dragActive: "float",
+              bounceTime: "float",
+              bounceBaseDisplacement: "vec3",
+              dragIntensity: "float",
+              bounceAmount: "float",
+              bounceSpeed: "float",
+            },
+            outTypes: { gsplat: dyno.Gsplat },
+            statements: ({ inputs, outputs }) =>
+              dyno.unindentLines(`
+                ${outputs.gsplat} = ${inputs.gsplat};
+                vec3 originalPos = ${inputs.gsplat}.center;
+
+                float distToDrag = distance(originalPos, ${inputs.dragPoint});
+                float dragInfluence = 1.0 - smoothstep(0.0, ${inputs.dragRadius}*2., distToDrag);
+                float time = ${inputs.bounceTime};
+
+                if (${inputs.dragActive} > 0.5 && ${inputs.dragRadius} > 0.0) {
+                  vec3 dragOffset = ${inputs.dragDisplacement} * dragInfluence * ${inputs.dragIntensity} * 50.0;
+                  originalPos += dragOffset;
+                }
+
+                float bounceFrequency = 1.0 + ${inputs.bounceSpeed} * 8.0;
+                vec3 bounceOffset = ${inputs.bounceBaseDisplacement} * dragInfluence * ${inputs.dragIntensity} * 50.0;
+                originalPos += bounceOffset * cos(time*bounceFrequency) * exp(-time*2.0*(1.0-${inputs.bounceAmount}*.9));
+
+                ${outputs.gsplat}.center = originalPos;
+              `),
+          });
+          return {
+            gsplat: shader.apply({
+              gsplat,
+              dragPoint,
+              dragDisplacement,
+              dragRadius,
+              dragActive,
+              bounceTime,
+              bounceBaseDisplacement,
+              dragIntensity,
+              bounceAmount,
+              bounceSpeed,
+            }).gsplat,
+          };
+        },
+      );
+      penguin.updateGenerator();
+      return { root: penguin, splatCount: penguin.numSplats };
+    },
+  },
   interactiveRipples: {
     // Mirrors the static initial-frame of examples/interactive-ripples/ —
     // valley.spz under a shockwave dyno modifier whose `hitpoint`
