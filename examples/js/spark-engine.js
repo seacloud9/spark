@@ -107,6 +107,7 @@ async function setupThreeBackend({
     camera,
     renderer,
     spark,
+    canvas: c,
     add: (node) => scene.add(node),
     run: (tick) => {
       let lastTime = 0;
@@ -215,6 +216,7 @@ async function setupBabylonBackend({
     camera: host.threeCamera,
     renderer: host.threeRenderer,
     spark: host.sparkRenderer,
+    canvas: c,
     babylonScene,
     babylonEngine: engine,
     host,

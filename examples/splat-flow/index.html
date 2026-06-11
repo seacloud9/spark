@@ -10,23 +10,24 @@
     </style>
   </head>
   <body>
-    <canvas id="canvas" tabindex="0"></canvas>
     <script type="importmap">
       {
         "imports": {
           "three": "../js/vendor/three/build/three.module.js",
           "three/addons/": "../js/vendor/three/examples/jsm/",
           "@sparkjsdev/spark": "../../dist/spark.module.js",
+          "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
           "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
         }
       }
     </script>
     <script type="module">
-      import { dyno, SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
+      import { dyno, SplatMesh } from "@sparkjsdev/spark";
       import * as THREE from "three";
       import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
       import { getAssetFileURL } from "../js/get-asset-url.js";
       import { GUI } from "lil-gui";
+      import { setupSparkExample } from "../js/spark-engine.js";
 
       const splatFiles = ["woobles.spz", "dessert.spz", "robot-head.spz"];
       const skyFile = "dali-env.glb";
@@ -120,34 +121,23 @@
         return gltf.scene;
       }
 
-      const canvas = document.getElementById("canvas");
-      const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
-      renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
-      renderer.setClearColor(0x000000, 1);
-
-      const scene = new THREE.Scene();
-      const spark = new SparkRenderer({ renderer });
-      scene.add(spark);
-
-      const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 1000);
-      camera.position.set(0, 5, 8);
-      camera.lookAt(0, 0, 0);
-      scene.add(camera);
-
-      window.addEventListener("resize", () => {
-        const w = canvas.clientWidth;
-        const h = canvas.clientHeight;
-        renderer.setSize(w, h, false);
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
+      const env = await setupSparkExample({
+        cameraConfig: {
+          fov: 50,
+          near: 0.01,
+          far: 1000,
+          position: [0, 5, 8],
+          lookAt: [0, 0, 0],
+        },
+        clearColor: 0x000000,
       });
+      const camera = env.camera;
 
       const time = dyno.dynoFloat(0.0);
 
       async function loadAssets() {
-        const env = await loadGLB(skyFile, true);
-        scene.add(env);
+        const sky = await loadGLB(skyFile, true);
+        env.scene.add(sky);
 
         const meshes = [];
         const period = dyno.dynoFloat(splatFiles.length);
@@ -163,7 +153,7 @@
           await m.initialized;
           m.position.copy(positions[i]);
           m.rotateX(Math.PI);
-          scene.add(m);
+          env.add(m);
           meshes.push(m);
         }
 
@@ -217,12 +207,11 @@
       });
 
       let last = 0;
-      renderer.setAnimationLoop(rt => {
+      env.run((rt) => {
         const t = rt * 0.0005;
         const dt = t - last;
         last = t;
         updateCamera(splatMeshes);
-        renderer.render(scene, camera);
         if (!PARAMETERS.pause) {
           time.value += dt * PARAMETERS.speedMultiplier;
           if (PARAMETERS.objectRotation) splatMeshes.forEach(m => m.rotation.y += dt * PARAMETERS.speedMultiplier * 2);

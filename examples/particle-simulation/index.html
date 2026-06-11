@@ -22,6 +22,7 @@
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
         "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
         "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
       }
     }
@@ -29,13 +30,13 @@
   <script type="module">
     import * as THREE from "three";
     import {
-      SparkRenderer,
       PointerControls,
       SplatMesh,
       generators,
     } from "@sparkjsdev/spark";
     import GUI from "lil-gui";
     import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
     const SCENE_CONFIG = {
       SNOW_HEIGHT: 8,
@@ -45,31 +46,15 @@
       CAMERA_DURATION: 90,
     };
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
-
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
-
-    function handleResize() {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      renderer.setSize(width, height);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-    }
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
+    const env = await setupSparkExample({
+      cameraConfig: {
+        fov: 75,
+        near: 0.1,
+        far: 1000,
+        position: [0, 0, 0],
+        lookAt: [0, 0, -1],
+      },
+    });
 
     const backgroundURL = await getAssetFileURL("snow-street.spz");
     const background = new SplatMesh({ url: backgroundURL });
@@ -79,12 +64,12 @@
       background.position.y - 12,
       background.position.z - 104,
     );
-    scene.add(background);
+    env.add(background);
     await background.initialized;
 
-    const controls = new PointerControls({ canvas: renderer.domElement });
+    const controls = new PointerControls({ canvas: env.canvas });
 
-    const cam = camera.position;
+    const cam = env.camera.position;
     const snowVolumeBox = new THREE.Box3(
       new THREE.Vector3(
         cam.x - SCENE_CONFIG.HALF_WIDTH,
@@ -107,7 +92,7 @@
       density: 1000,
       maxScale: 0.01,
     });
-    scene.add(snow.snow);
+    env.add(snow.snow);
 
     const gui = new GUI({ title: "Snow Particle Simulation" });
     const params = {
@@ -214,13 +199,11 @@
       })
       .name("Wind Direction");
 
-    let lastTime;
-    renderer.setAnimationLoop(function animate(time) {
+    env.run((time, dtMs) => {
       const t = time * 0.001;
-      const dt = t - (lastTime ?? t);
-      lastTime = t;
+      const dt = dtMs * 0.001;
 
-      controls.update(dt, camera);
+      controls.update(dt, env.camera);
 
       // camera movement
       const targetZ = -13.5;
@@ -228,7 +211,7 @@
       const duration = 90;
       const progress = Math.min(1, t / duration);
       const smoothProgress = Math.sin(progress * Math.PI * 0.5);
-      camera.position.z = startZ + (targetZ - startZ) * smoothProgress;
+      env.camera.position.z = startZ + (targetZ - startZ) * smoothProgress;
 
       if (!params.isPaused) {
         snow.fallVelocity.value = params.fallVelocity;
@@ -236,8 +219,6 @@
         snow.wanderVariance.value = params.wanderVariance;
         snow.maxScale.value = params.maxScale;
       }
-
-      renderer.render(scene, camera);
     });
 
   </script>

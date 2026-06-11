@@ -28,6 +28,9 @@ const ENGINE_AWARE_EXAMPLES = [
   "splat-reveal-effects",
   "splat-shader-effects",
   "raycasting",
+  "particle-animation",
+  "particle-simulation",
+  "splat-flow",
 ];
 
 test("examples index shows engine-aware bullet for every ported example", async ({

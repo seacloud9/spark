@@ -27,19 +27,17 @@
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
         "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
         "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
       }
     }
   </script>
   <script type="module">
     import * as THREE from "three";
-    import {
-      SparkRenderer,
-      PointerControls,
-      SplatMesh,
-    } from "@sparkjsdev/spark";
+    import { PointerControls, SplatMesh } from "@sparkjsdev/spark";
     import GUI from "lil-gui";
     import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
     // cloud bounds
     const BOUNDS = {
@@ -259,32 +257,16 @@
     }
 
     // setup scene + environment
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(
-      75,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
-
-    scene.background = new THREE.Color(0x08a2d3);
-
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
-
-    function handleResize() {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      renderer.setSize(width, height);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-    }
-    handleResize();
-    window.addEventListener("resize", handleResize);
+    const env = await setupSparkExample({
+      cameraConfig: {
+        fov: 75,
+        near: 0.1,
+        far: 1000,
+        position: [0, 0, 0],
+        lookAt: [0, 0, -1],
+      },
+      clearColor: 0x08a2d3,
+    });
 
     // add sky background
     const skyGeometry = new THREE.SphereGeometry(10, 60, 40);
@@ -296,26 +278,28 @@
     const skySphere = new THREE.Mesh(skyGeometry, skyMaterial);
     skySphere.scale.set(-1, 1, 1);
     skySphere.renderDepth = 1000.0;
-    scene.add(skySphere);
-    camera.position.set(0, 0, 0);
-    skySphere.position.copy(camera.position);
+    env.scene.add(skySphere);
+    skySphere.position.copy(env.camera.position);
 
-    const controls = new PointerControls({ canvas: renderer.domElement });
+    // PointerControls binds events to the visible top-of-DOM canvas; in
+    // babylon mode env.renderer.domElement is offscreen so env.canvas is
+    // the right surface to listen on.
+    const controls = new PointerControls({ canvas: env.canvas });
 
     // create initial clouds on first load
     let clouds = createCloudMesh(params, BOUNDS);
     clouds.position.set(0, -0.5, -2);
-    scene.add(clouds);
+    env.add(clouds);
 
     function recreateClouds() {
       if (clouds) {
-        scene.remove(clouds);
+        env.scene.remove(clouds);
         clouds.dispose();
       }
 
       clouds = createCloudMesh(params, BOUNDS);
       clouds.position.set(0, -0.5, -2);
-      scene.add(clouds);
+      env.add(clouds);
     }
 
     // cloud parameter controls
@@ -365,13 +349,9 @@
       );
     }
 
-    let lastTime = 0;
-    renderer.setAnimationLoop(function animate(time) {
-      const deltaTime = (time - lastTime) * 0.001;
-      lastTime = time;
-
-      controls.update(deltaTime, camera);
-      renderer.render(scene, camera);
+    env.run((time, dtMs) => {
+      const deltaTime = dtMs * 0.001;
+      controls.update(deltaTime, env.camera);
     });
 
   </script>
