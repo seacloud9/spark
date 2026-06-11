@@ -988,6 +988,191 @@ export const SCENES = {
     clearColor: 0x1b2037,
     build: buildEnvMap,
   },
+  splatShaderEffects: {
+    // Mirrors the static initial-frame of examples/splat-shader-effects/ —
+    // cat.spz under the example's 5-effect bundle (Electronic /
+    // Meditation / Waves / Disintegrate / Flare), captured with the
+    // default GUI state (effect: Disintegrate, intensity: 0.8) and
+    // animateT pinned to 0. The shader's output at these deterministic
+    // uniform values is itself deterministic; the captured cat shows
+    // the disintegrate effect at t=0 — partially deconstructed, scales
+    // mixed against the floor (0.01) per the `e.w` blend factor.
+    // First Tier 5 shader-effects scene with the full effect bundle
+    // (existing splatDissolve / splatReveal are single-effect shaders).
+    camera: {
+      position: [0, 0, 0],
+      lookAt: [0, 0, -1],
+      fov: 60,
+      near: 0.1,
+      far: 10,
+    },
+    clearColor: 0x000000,
+    build: async () => {
+      const cat = new SplatMesh({ url: splatUrl("cat.spz") });
+      await cat.initialized;
+      cat.quaternion.set(1, 0, 0, 0);
+      cat.position.set(0, 0, -1.5);
+      cat.scale.set(0.5, 0.5, 0.5);
+
+      // Lift the example's full effect bundle as-is. `globals()` holds
+      // the helper functions (hash, rot, headMovement, breathAnimation,
+      // fractal1, fractal2, sin3D, disintegrate, flare); `statements()`
+      // dispatches on effectType to the matching effect. The captured
+      // frame uses effectType=5 (Disintegrate) per the example's
+      // default; intensity=0.8 matches the GUI's default slider
+      // position; t=0 pins the animation to its starting frame.
+      cat.objectModifier = dyno.dynoBlock(
+        { gsplat: dyno.Gsplat },
+        { gsplat: dyno.Gsplat },
+        ({ gsplat }) => {
+          const d = new dyno.Dyno({
+            inTypes: {
+              gsplat: dyno.Gsplat,
+              t: "float",
+              effectType: "int",
+              intensity: "float",
+            },
+            outTypes: { gsplat: dyno.Gsplat },
+            globals: () => [
+              dyno.unindent(`
+                vec3 hash(vec3 p) {
+                  return fract(sin(p*123.456)*123.456);
+                }
+
+                mat2 rot(float a) {
+                  float s = sin(a), c = cos(a);
+                  return mat2(c, -s, s, c);
+                }
+
+                vec3 headMovement(vec3 pos, float t) {
+                  pos.xy *= rot(smoothstep(-1., -2., pos.y) * .2 * sin(t*2.));
+                  return pos;
+                }
+
+                vec3 breathAnimation(vec3 pos, float t) {
+                  float b = sin(t*1.5);
+                  pos.yz *= rot(smoothstep(-1., -3., pos.y) * .15 * -b);
+                  pos.z += .3;
+                  pos.y += 1.2;
+                  pos *= 1. + exp(-3. * length(pos)) * b;
+                  pos.z -= .3;
+                  pos.y -= 1.2;
+                  return pos;
+                }
+
+                vec4 fractal1(vec3 pos, float t, float intensity) {
+                  float m = 100.;
+                  vec3 p = pos * .1;
+                  p.y += .5;
+                  for (int i = 0; i < 8; i++) {
+                    p = abs(p) / clamp(abs(p.x * p.y), 0.3, 3.) - 1.;
+                    p.xy *= rot(radians(90.));
+                    if (i > 1) m = min(m, length(p.xy) + step(.3, fract(p.z * .5 + t * .5 + float(i) * .2)));
+                  }
+                  m = step(m, 0.5) * 1.3 * intensity;
+                  return vec4(-pos.y * .3, 0.5, 0.7, .3) * intensity + m;
+                }
+
+                vec4 fractal2(vec3 center, vec3 scales, vec4 rgba, float t, float intensity) {
+                  vec3 pos = center;
+                  float splatSize = length(scales);
+                  float pattern = exp(-50. * splatSize);
+                  vec3 p = pos * .65;
+                  pos.y += 2.;
+                  float c = 0.;
+                  float l, l2 = length(p);
+                  float m = 100.;
+
+                  for (int i = 0; i < 10; i++) {
+                    p.xyz = abs(p.xyz) / dot(p.xyz, p.xyz) - .8;
+                    l = length(p.xyz);
+                    c += exp(-1. * abs(l - l2) * (1. + sin(t * 1.5 + pos.y)));
+                    l2 = length(p.xyz);
+                    m = min(m, length(p.xyz));
+                  }
+
+                  c = smoothstep(0.3, 0.5, m + sin(t * 1.5 + pos.y * .5)) + c * .1;
+                  return vec4(vec3(length(rgba.rgb)) * vec3(c, c*c, c*c*c) * intensity,
+                            rgba.a * exp(-20. * splatSize) * m * intensity);
+                }
+
+                vec4 sin3D(vec3 p, float t) {
+                  float m = exp(-2. * length(sin(p * 5. + t * 3.))) * 5.;
+                  return vec4(m) + .3;
+                }
+
+                vec4 disintegrate(vec3 pos, float t, float intensity) {
+                  vec3 p = pos + (hash(pos) * 2. - 1.) * intensity;
+                  float tt = smoothstep(-1., 0.5, -sin(t + -pos.y * .5));
+                  p.xz *= rot(tt * 2. + p.y * 2. * tt);
+                  return vec4(mix(p, pos, tt), tt);
+                }
+
+                vec4 flare(vec3 pos, float t) {
+                  vec3 p = vec3(0., -1.5, 0.);
+                  float tt = smoothstep(-1., .5, sin(t + hash(pos).x));
+                  tt = tt * tt;
+                  p.x += sin(t * 2.) * tt;
+                  p.z += sin(t * 2.) * tt;
+                  p.y += sin(t) * tt;
+                  return vec4(mix(pos, p, tt), tt);
+                }
+              `),
+            ],
+            statements: ({ inputs, outputs }) =>
+              dyno.unindentLines(`
+                ${outputs.gsplat} = ${inputs.gsplat};
+
+                vec3 localPos = ${inputs.gsplat}.center;
+                vec3 splatScales = ${inputs.gsplat}.scales;
+                vec4 splatColor = ${inputs.gsplat}.rgba;
+
+                if (${inputs.effectType} == 1) {
+                  ${outputs.gsplat}.center = headMovement(localPos, ${inputs.t});
+                  vec4 effect1 = fractal1(localPos, ${inputs.t}, ${inputs.intensity});
+                  ${outputs.gsplat}.rgba.rgba = mix(splatColor, splatColor*effect1, ${inputs.intensity});
+                }
+                else if (${inputs.effectType} == 2) {
+                  vec4 effectColor = fractal2(localPos, splatScales, splatColor, ${inputs.t}, ${inputs.intensity});
+                  ${outputs.gsplat}.rgba.rgba = mix(splatColor, effectColor, ${inputs.intensity});
+                  ${outputs.gsplat}.center = breathAnimation(localPos, ${inputs.t});
+                }
+                else if (${inputs.effectType} == 3) {
+                  vec4 effect = sin3D(localPos, ${inputs.t});
+                  ${outputs.gsplat}.rgba.rgba = mix(splatColor, splatColor*effect, ${inputs.intensity});
+                  vec3 pos = localPos;
+                  pos.y += 1.;
+                  pos *= (1. + effect.x * .05 * ${inputs.intensity});
+                  pos.y -= 1.;
+                  ${outputs.gsplat}.center = pos;
+                }
+                else if (${inputs.effectType} == 5) {
+                  vec4 e = disintegrate(localPos, ${inputs.t}, ${inputs.intensity});
+                  ${outputs.gsplat}.center = e.xyz;
+                  ${outputs.gsplat}.scales = mix(vec3(.01, .01, .01), ${inputs.gsplat}.scales, e.w);
+                }
+                else if (${inputs.effectType} == 4) {
+                  vec4 e = flare(localPos, ${inputs.t});
+                  ${outputs.gsplat}.center = e.xyz;
+                  ${outputs.gsplat}.rgba.rgb = mix(splatColor.rgb, vec3(1.), abs(e.w));
+                  ${outputs.gsplat}.rgba.a = mix(splatColor.a, 0.3, abs(e.w));
+                }
+              `),
+          });
+          return {
+            gsplat: d.apply({
+              gsplat,
+              t: dyno.dynoFloat(0),
+              effectType: dyno.dynoInt(5),
+              intensity: dyno.dynoFloat(0.8),
+            }).gsplat,
+          };
+        },
+      );
+      cat.updateGenerator();
+      return { root: cat, splatCount: cat.numSplats };
+    },
+  },
   interactiveDeform: {
     // Mirrors the static initial-frame of examples/interactive-deform/ —
     // penguin.spz under the dragBounce dyno modifier with
