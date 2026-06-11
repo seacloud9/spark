@@ -17,6 +17,7 @@
       padding-top: 20px;
       text-align: center;
       width: 100vw;
+      z-index: 1;
     }
   </style>
 </head>
@@ -28,32 +29,26 @@
       "imports": {
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
-        "@sparkjsdev/spark": "../../dist/spark.module.js"
+        "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm"
       }
     }
   </script>
   <script type="module">
     import * as THREE from "three";
-    import { SparkRenderer, SplatMesh, PackedSplats } from "@sparkjsdev/spark";
+    import { SplatMesh, PackedSplats } from "@sparkjsdev/spark";
     import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 10);
-    camera.position.set(0, -0.25, -1.5);
-    camera.lookAt(0, -0.15, 0);
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
-
-    window.addEventListener('resize', onWindowResize, false);
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    const env = await setupSparkExample({
+      cameraConfig: {
+        fov: 50,
+        near: 0.1,
+        far: 10,
+        position: [0, -0.25, -1.5],
+        lookAt: [0, -0.15, 0],
+      },
+    });
 
     // Add robots
     const NUM_ROBOTS = 5;
@@ -68,39 +63,35 @@
       robot.speed = 600 + i * 10;
       robot.angle = 0;
       robot.clickedTimer = false;
-      scene.add(robot);
+      env.add(robot);
       robots.push(robot);
     }
 
-    // Raycast logic
+    // Raycast logic. Attach to document so the click is caught regardless of
+    // which engine's canvas is currently composited on top. NDC is computed
+    // from viewport dimensions so it stays accurate across backends.
     const raycaster = new THREE.Raycaster();
-    renderer.domElement.addEventListener("click", (event) => {
+    document.addEventListener("click", (event) => {
       const clickCoords = new THREE.Vector2(
-        (event.clientX / renderer.domElement.width) * 2 - 1,
-        -(event.clientY / renderer.domElement.height) * 2 + 1,
+        (event.clientX / window.innerWidth) * 2 - 1,
+        -(event.clientY / window.innerHeight) * 2 + 1,
       );
 
-      // Run raycaster
-      raycaster.setFromCamera(clickCoords, camera);
-      const hits = raycaster.intersectObjects(scene.children);
+      raycaster.setFromCamera(clickCoords, env.camera);
+      const hits = raycaster.intersectObjects(env.scene.children);
 
-      // Find first SplatMesh
       const index = hits.findIndex(hit => hit.object instanceof SplatMesh);
       if (index >= 0) {
         const robot = hits[index].object;
         if (!robot.clickedTimer) {
-          // Tint object and start countdown timer to remove tint
           robot.recolor.set(1, 0.5, 0.5);
           robot.clickedTimer = 40;
         }
       }
     });
 
-    // Main loop
-    renderer.setAnimationLoop(function animate(time) {
-      // Animate all robots, and check if it's time to remove tint
+    env.run((time) => {
       for (let robot of robots) {
-        // Pendulum movement
         robot.position.x = Math.cos(robot.angle) * 0.6;
         robot.position.y = Math.sin(robot.angle) * 0.6;
         robot.angle = Math.PI * 1.5 + Math.sin(time / robot.speed);
@@ -108,12 +99,10 @@
         if (robot.clickedTimer > 0) {
           robot.clickedTimer -= 1;
           if (robot.clickedTimer == 0) {
-            // Clicked timer expired, remove tint
             robot.recolor.set(1, 1, 1);
           }
         }
       }
-      renderer.render(scene, camera);
     });
   </script>
 </body>

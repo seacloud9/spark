@@ -25,6 +25,9 @@ const ENGINE_AWARE_EXAMPLES = [
   "splat-transitions",
   "mobile-joystick",
   "splat-dissolve-effects",
+  "splat-reveal-effects",
+  "splat-shader-effects",
+  "raycasting",
 ];
 
 test("examples index shows engine-aware bullet for every ported example", async ({
