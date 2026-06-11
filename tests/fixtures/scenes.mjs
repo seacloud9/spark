@@ -457,11 +457,7 @@ async function buildNonLod() {
   const middle = makeButterfly(url, [0, 0, -1.5]);
   const right = makeButterfly(url, [1, 0, -1.5]);
 
-  await Promise.all([
-    left.initialized,
-    middle.initialized,
-    right.initialized,
-  ]);
+  await Promise.all([left.initialized, middle.initialized, right.initialized]);
 
   const group = new THREE.Group();
   group.add(left);
@@ -990,6 +986,86 @@ export const SCENES = {
     },
     clearColor: 0x1b2037,
     build: buildEnvMap,
+  },
+  interactiveRipples: {
+    // Mirrors the static initial-frame of examples/interactive-ripples/ —
+    // valley.spz under a shockwave dyno modifier whose `hitpoint`
+    // uniform sits far away (z=1000) so the smoothstep gate
+    // `smoothstep(time*2, 0, distance)` evaluates to 0 for every
+    // splat: edge0=time*2 > edge1=0, distance≥998 > edge0, so the
+    // displacement multiplier is 0 and the modifier is a pure
+    // passthrough at the captured frame. Time is held at 0.001 (small
+    // but nonzero) to exercise the time-driven shader path without
+    // letting any ripple amplitude leak through.
+    camera: {
+      position: [0, 0, 3],
+      lookAt: [0, 0, 0],
+      fov: 50,
+      near: 0.01,
+      far: 2000,
+    },
+    clearColor: 0x000000,
+    time: 0.001,
+    build: async () => {
+      const valley = new SplatMesh({ url: splatUrl("valley.spz") });
+      await valley.initialized;
+      valley.rotateX(Math.PI);
+
+      // Lift the example's shockwave dyno block — same shader source
+      // so the gen-pass code path is byte-identical to what the
+      // example produces. The `time` input is driven from spark.time
+      // via dyno.dynoFloat(); the host wires sceneCfg.time onto
+      // spark.time before the first sort.
+      const hitpointUniform = dyno.dynoVec3(new THREE.Vector3(0, 0, 1000));
+      const timeUniform = dyno.dynoFloat(0.001);
+      valley.objectModifier = dyno.dynoBlock(
+        { gsplat: dyno.Gsplat },
+        { gsplat: dyno.Gsplat },
+        ({ gsplat }) => {
+          const shader = new dyno.Dyno({
+            inTypes: {
+              gsplat: dyno.Gsplat,
+              time: "float",
+              hitpoint: "vec3",
+            },
+            outTypes: { gsplat: dyno.Gsplat },
+            globals: () => [
+              dyno.unindent(`
+                vec3 shockwave(vec3 center, float t, vec3 hitpoint) {
+                  vec3 direction = center - hitpoint;
+                  float distance = length(direction);
+                  center += normalize(direction)*sin(t*4.-distance*5.)*exp(-t)*smoothstep(t*2.,0.,distance)*.5;
+                  return center;
+                }
+                vec4 shockwaveColor(vec4 rgba, vec3 center, float t, vec3 hitpoint) {
+                  vec3 direction = center - hitpoint;
+                  float distance = length(direction);
+                  float wave = sin(t*4.-distance*5.)*exp(-t*.7)*smoothstep(t*2.,0.,distance);
+                  float brightness = pow(abs(wave),3.) * 10.;
+                  rgba.rgb += brightness;
+                  return rgba;
+                }
+              `),
+            ],
+            statements: ({ inputs, outputs }) =>
+              dyno.unindentLines(`
+                ${outputs.gsplat} = ${inputs.gsplat};
+                ${outputs.gsplat}.center = shockwave(${inputs.gsplat}.center, ${inputs.time}, ${inputs.hitpoint});
+                ${outputs.gsplat}.rgba = shockwaveColor(${inputs.gsplat}.rgba, ${inputs.gsplat}.center, ${inputs.time}, ${inputs.hitpoint});
+              `),
+          });
+          return {
+            gsplat: shader.apply({
+              gsplat,
+              time: timeUniform,
+              hitpoint: hitpointUniform,
+            }).gsplat,
+          };
+        },
+      );
+      valley.updateGenerator();
+      return { root: valley, splatCount: valley.numSplats };
+    },
   },
   raycasting: {
     // Mirrors the static initial-frame of examples/raycasting/ — five
