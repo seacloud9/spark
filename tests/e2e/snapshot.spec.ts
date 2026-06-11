@@ -34,6 +34,7 @@ const SCENES = [
   "envMap",
   "raycasting",
   "splatShaderEffects",
+  "splatShaderEffectsFlare",
   "interactiveDeform",
   "interactiveRipples",
 ] as const;
@@ -60,6 +61,7 @@ const NETWORK_SCENES = new Set<SceneName>([
   "envMap",
   "raycasting",
   "splatShaderEffects",
+  "splatShaderEffectsFlare",
   "interactiveDeform",
   "interactiveRipples",
 ]);
@@ -98,6 +100,7 @@ const NATIVE_BABYLON_SCENES = new Set<SceneName>([
   "sogs",
   "raycasting",
   "splatShaderEffects",
+  "splatShaderEffectsFlare",
   "interactiveDeform",
   "interactiveRipples",
   // envMap deliberately excluded — the scene loads a rubberduck.glb
