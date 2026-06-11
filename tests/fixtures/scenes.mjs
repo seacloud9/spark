@@ -1174,6 +1174,9 @@ export const SCENES = {
   },
   splatShaderEffects: buildSplatShaderEffectsScene(5),
   splatShaderEffectsFlare: buildSplatShaderEffectsScene(4),
+  splatShaderEffectsElectronic: buildSplatShaderEffectsScene(1),
+  splatShaderEffectsMeditation: buildSplatShaderEffectsScene(2),
+  splatShaderEffectsWaves: buildSplatShaderEffectsScene(3),
   interactiveDeform: {
     // Mirrors the static initial-frame of examples/interactive-deform/ —
     // penguin.spz under the dragBounce dyno modifier with
