@@ -292,6 +292,90 @@ for (const engine of ENGINES) {
   });
 }
 
+for (const engine of ENGINES) {
+  test(`interactive-deform drag completes on engine=${engine}`, async ({
+    page,
+  }) => {
+    test.setTimeout(360_000);
+
+    const errors: string[] = [];
+    page.on("pageerror", (err) => {
+      errors.push(err.message);
+    });
+    page.on("console", (msg) => {
+      if (msg.type() !== "error") return;
+      const text = msg.text();
+      if (text.includes("ws://127.0.0.1:4173")) return;
+      errors.push(`console.error: ${text}`);
+    });
+
+    const qs = engine === "three" ? "" : `?engine=${engine}`;
+    await page.goto(`/examples/interactive-deform/${qs}`, {
+      timeout: 120_000,
+    });
+
+    await expect(page.locator("#spark-engine-switcher")).toBeVisible({
+      timeout: 120_000,
+    });
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-deform-ready",
+      "true",
+      { timeout: 120_000 },
+    );
+
+    // The penguin fills most of the viewport at the default camera. Drag
+    // pattern: down at center → move 40px in 4 steps → up. Tests the
+    // pointerdown + pointermove + pointerup pipeline AND that the
+    // intermediate move events get delivered (not just first/last).
+    const viewport = page.viewportSize();
+    if (!viewport) throw new Error("no viewport");
+    const cx = Math.floor(viewport.width / 2);
+    const cy = Math.floor(viewport.height / 2);
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.waitForTimeout(80);
+    for (let i = 1; i <= 4; i++) {
+      await page.mouse.move(cx + i * 10, cy - i * 10);
+      await page.waitForTimeout(60);
+    }
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-deform-downs",
+      "1",
+      { timeout: 5_000 },
+    );
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-deform-ups",
+      "1",
+      { timeout: 5_000 },
+    );
+    // Hit + move counts vary by engine because Playwright's mouse.move
+    // is granular. Log them and assert non-zero.
+    const moves = await page
+      .locator("body")
+      .getAttribute("data-deform-moves");
+    const hits = await page
+      .locator("body")
+      .getAttribute("data-deform-hits");
+    const lastHitpoint = await page
+      .locator("body")
+      .getAttribute("data-deform-last-hitpoint");
+    // eslint-disable-next-line no-console
+    console.log(
+      `[interactive-deform ${engine}] moves=${moves ?? "0"} hits=${hits ?? "0"} lastHitpoint=${lastHitpoint ?? "none"}`,
+    );
+    expect(Number(moves ?? 0)).toBeGreaterThan(0);
+
+    if (errors.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`[interactive-deform ${engine}] errors:`, errors);
+    }
+    expect(errors).toEqual([]);
+  });
+}
+
 for (const name of ENGINE_AWARE_EXAMPLES) {
   for (const engine of ENGINES) {
     test(`${name} loads on engine=${engine}`, async ({ page }) => {

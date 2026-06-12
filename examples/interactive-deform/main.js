@@ -167,6 +167,10 @@ async function loadSplat() {
 
   splatMesh.worldModifier = createDragBounceDynoshader();
   splatMesh.updateGenerator();
+
+  // Interaction smoke gate: lets Playwright wait until the penguin is
+  // clickable. Same pattern as raycasting / interactive-ripples.
+  document.body.dataset.deformReady = "true";
 }
 
 loadSplat().catch((error) => {
@@ -198,7 +202,17 @@ function getHitPoint(ndc) {
 let dragStartNDC = null;
 let dragScale = 1.0;
 
+// Interaction smoke counters. Same dataset-flag template as
+// raycasting / interactive-ripples / render-cube-depth.
+let downCount = 0;
+let moveCount = 0;
+let upCount = 0;
+let hitCount = 0;
+
 env.canvas.addEventListener("pointerdown", (event) => {
+  downCount += 1;
+  document.body.dataset.deformDowns = String(downCount);
+
   if (!splatMesh) return;
 
   const ndc = getMouseNDC(event);
@@ -224,10 +238,17 @@ env.canvas.addEventListener("pointerdown", (event) => {
     bounceTime.value = -1.0;
     bounceBaseDisplacement.value.set(0, 0, 0);
     isBouncing = false;
+
+    hitCount += 1;
+    document.body.dataset.deformHits = String(hitCount);
+    document.body.dataset.deformLastHitpoint = `${hitPoint.x.toFixed(3)},${hitPoint.y.toFixed(3)},${hitPoint.z.toFixed(3)}`;
   }
 });
 
 env.canvas.addEventListener("pointermove", (event) => {
+  moveCount += 1;
+  document.body.dataset.deformMoves = String(moveCount);
+
   if (!isDragging || !splatMesh || !dragStartPoint || !dragStartNDC) return;
 
   const ndc = getMouseNDC(event);
@@ -253,6 +274,9 @@ env.canvas.addEventListener("pointermove", (event) => {
 });
 
 env.canvas.addEventListener("pointerup", (event) => {
+  upCount += 1;
+  document.body.dataset.deformUps = String(upCount);
+
   if (!isDragging) return;
 
   isDragging = false;
