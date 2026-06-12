@@ -37,6 +37,7 @@ const ENGINE_AWARE_EXAMPLES = [
   "interactivity",
   "splat-painter",
   "viewer",
+  "multiple-viewpoints",
 ];
 
 test("examples index shows engine-aware bullet for every ported example", async ({
