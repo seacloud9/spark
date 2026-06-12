@@ -41,7 +41,7 @@ The Codex continuation added `env.runManual(tick)` for examples that own their r
 
 ## What's left
 
-No ordinary example is left to port for engine-aware smoke coverage. `tests/e2e/multibackend-smoke.spec.ts` now has two index guards:
+No ordinary example is left to port for engine-aware smoke coverage. `test/e2e/multibackend-smoke.spec.ts` now has two index guards:
 
 - every `ENGINE_AWARE_EXAMPLES` row must be marked `class="engine-aware"` and expose A-Frame/Babylon links;
 - the only allowed non-engine-aware rows are exactly `editor`, `basic-xr`, `webxr`, `spark-babylon`, `spark-babylon-native`.
@@ -73,11 +73,11 @@ Per-example tweaks: see `examples/raycasting/index.html` (simple), `examples/par
 ## Required follow-up after each port
 
 1. Mark `<tr class="engine-aware">` on the row in `examples/index.html`.
-2. Add the example name to `ENGINE_AWARE_EXAMPLES` in `tests/e2e/multibackend-smoke.spec.ts`.
+2. Add the example name to `ENGINE_AWARE_EXAMPLES` in `test/e2e/multibackend-smoke.spec.ts`.
 3. Run smoke before commit:
    ```bash
    wsl -d Ubuntu -- bash -ic 'cd /mnt/c/Users/brend/exp/spark && nvm use 20 && \
-     pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep "<name>"'
+     pnpm exec playwright test test/e2e/multibackend-smoke.spec.ts --grep "<name>"'
    ```
    `bash -ic` (interactive) loads nvm — `bash -lc` does NOT.
 4. Commit with rich body covering why / what / verification (see `eb54747` for the form). Write the body to `c:/tmp/commit-msg.txt`, then `git commit -F c:/tmp/commit-msg.txt` — bash heredocs eat backticks.
@@ -85,9 +85,9 @@ Per-example tweaks: see `examples/raycasting/index.html` (simple), `examples/par
 ## Files to read first next session
 
 1. `MULTI-BACKEND-PARITY-PLAN.md` — Live parity-matrix state (memory files lag this).
-2. `tests/fixtures/scenes.mjs` — The 27 scene definitions.
-3. `tests/e2e/snapshot.spec.ts` — `SCENES` / `NETWORK_SCENES` / `NATIVE_BABYLON_SCENES` configuration.
-4. `tests/e2e/multibackend-smoke.spec.ts` — `ENGINE_AWARE_EXAMPLES` array.
+2. `test/fixtures/scenes.mjs` — The 27 scene definitions.
+3. `test/e2e/snapshot.spec.ts` — `SCENES` / `NETWORK_SCENES` / `NATIVE_BABYLON_SCENES` configuration.
+4. `test/e2e/multibackend-smoke.spec.ts` — `ENGINE_AWARE_EXAMPLES` array.
 5. `examples/js/spark-engine.js` — The helper. `env.canvas` and the three `setup*Backend` functions.
 
 ## Memory pointers

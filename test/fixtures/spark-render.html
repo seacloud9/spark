@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Spark Renderer Fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="view" width="96" height="96"></canvas>
+    <script type="module">
+      import * as THREE from "three";
+      import {
+        constructAxes,
+        SparkRenderer,
+        SplatMesh,
+      } from "/src/index.ts";
+      import { captureThreeRendererPng } from "/src/backends/three/ThreeCapture.ts";
+
+      const canvas = document.querySelector("#view");
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: false,
+        preserveDrawingBuffer: true,
+      });
+      renderer.setSize(96, 96, false);
+      renderer.setClearColor(0x10151c, 1);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(55, 1, 0.01, 10);
+      camera.position.set(0.45, 0.35, 1.8);
+      camera.lookAt(0, 0, 0);
+
+      const spark = new SparkRenderer({
+        renderer,
+        enableLod: false,
+        minSortIntervalMs: 0,
+      });
+      scene.add(spark);
+
+      const mesh = new SplatMesh({
+        constructSplats: (splats) => {
+          constructAxes({
+            splats,
+            scale: 0.25,
+            axisRadius: 0.02,
+            axisShadowScale: 1.5,
+          });
+        },
+      });
+      scene.add(mesh);
+      await mesh.initialized;
+
+      await spark.update({ scene, camera });
+      renderer.render(scene, camera);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      renderer.render(scene, camera);
+
+      const capture = captureThreeRendererPng({
+        renderer,
+        width: 96,
+        height: 96,
+      });
+      const gl = renderer.getContext();
+      const pixels = new Uint8Array(96 * 96 * 4);
+      gl.readPixels(0, 0, 96, 96, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      let litPixels = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i] > 30 || pixels[i + 1] > 30 || pixels[i + 2] > 30) {
+          litPixels++;
+        }
+      }
+
+      window.sparkRenderFixture = {
+        activeSplats: spark.activeSplats,
+        meshSplats: mesh.numSplats,
+        litPixels,
+        capture: {
+          mimeType: capture.mimeType,
+          width: capture.width,
+          height: capture.height,
+          signature: Array.from(capture.data.slice(0, 8)),
+          bytes: capture.data.length,
+        },
+      };
+      document.body.dataset.ready = "true";
+    </script>
+  </body>
+</html>

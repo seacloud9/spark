@@ -27,7 +27,7 @@ import {
 const ASSET_BASE = "https://sparkjs.dev/assets";
 
 // Locally-vendored test fixtures, served by the dev server from
-// tests/fixtures/assets/. Scenes that target these names get the
+// test/fixtures/assets/. Scenes that target these names get the
 // repo-local file instead of the sparkjs.dev CDN, which removes
 // network latency and CDN flakiness from the parity gate for the
 // most-used assets. Add files here as Phase F lands them.
@@ -52,14 +52,14 @@ const VENDORED_MODELS = new Set(["rubberduck.glb"]);
 
 function splatUrl(filename) {
   if (VENDORED_ASSETS.has(filename)) {
-    return `/tests/fixtures/assets/${filename}`;
+    return `/test/fixtures/assets/${filename}`;
   }
   return `${ASSET_BASE}/splats/${filename}`;
 }
 
 function modelUrl(filename) {
   if (VENDORED_MODELS.has(filename)) {
-    return `/tests/fixtures/assets/models/${filename}`;
+    return `/test/fixtures/assets/models/${filename}`;
   }
   return `${ASSET_BASE}/models/${filename}`;
 }

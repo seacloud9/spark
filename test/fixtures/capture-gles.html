@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Spark Capture GLES Fixture</title>
+  </head>
+  <body>
+    <canvas id="gl" width="16" height="16"></canvas>
+    <canvas id="pixels" width="2" height="2"></canvas>
+    <script type="module">
+      import * as THREE from "three";
+      import { createPngStillCapture } from "/src/backends/capture.ts";
+      import { probeGlesConformance } from "/src/backends/gles.ts";
+      import {
+        captureThreeRendererPng,
+        probeThreeRendererGlesConformance,
+      } from "/src/backends/three/ThreeCapture.ts";
+
+      const glCanvas = document.querySelector("#gl");
+      const gl = glCanvas.getContext("webgl2", { antialias: false });
+      if (!gl) {
+        throw new Error("WebGL2 is not available");
+      }
+
+      const pixelsCanvas = document.querySelector("#pixels");
+      const ctx = pixelsCanvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) {
+        throw new Error("2D canvas is not available");
+      }
+
+      const imageData = ctx.createImageData(2, 2);
+      imageData.data.set([
+        255, 0, 0, 255,
+        0, 255, 0, 255,
+        0, 0, 255, 255,
+        255, 255, 255, 255,
+      ]);
+      ctx.putImageData(imageData, 0, 0);
+
+      const capture = createPngStillCapture({
+        pixels: new Uint8Array(imageData.data),
+        width: 2,
+        height: 2,
+      });
+
+      const threeCanvas = document.createElement("canvas");
+      threeCanvas.width = 4;
+      threeCanvas.height = 4;
+      document.body.appendChild(threeCanvas);
+      const renderer = new THREE.WebGLRenderer({
+        canvas: threeCanvas,
+        antialias: false,
+        preserveDrawingBuffer: true,
+      });
+      renderer.setSize(4, 4, false);
+      renderer.setClearColor(0x336699, 1);
+      renderer.clear(true, true, true);
+      const threeCapture = captureThreeRendererPng({
+        renderer,
+        width: 4,
+        height: 4,
+      });
+
+      window.sparkFixture = {
+        capture: {
+          mimeType: capture.mimeType,
+          width: capture.width,
+          height: capture.height,
+          signature: Array.from(capture.data.slice(0, 8)),
+          bytes: capture.data.length,
+        },
+        threeCapture: {
+          mimeType: threeCapture.mimeType,
+          width: threeCapture.width,
+          height: threeCapture.height,
+          signature: Array.from(threeCapture.data.slice(0, 8)),
+          bytes: threeCapture.data.length,
+        },
+        conformance: probeGlesConformance({ backend: "three", gl }),
+        threeConformance: probeThreeRendererGlesConformance(renderer),
+      };
+      document.body.dataset.ready = "true";
+    </script>
+  </body>
+</html>

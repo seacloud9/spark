@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Spark Three Snapshot Fixture</title>
+    <title>Spark A-Frame Snapshot Fixture</title>
     <style>
       html,
       body {
@@ -18,11 +18,20 @@
     <canvas id="view" width="1024" height="768"></canvas>
     <script type="module">
       import { SparkRenderer } from "/src/index.ts";
+      import { registerSparkAFrame } from "/src/backends/aframe/SparkAFrameIntegration.ts";
       import {
         THREE,
         getScene,
         getSceneName,
-      } from "/tests/fixtures/scenes.mjs";
+      } from "/test/fixtures/scenes.mjs";
+
+      // We deliberately do NOT load A-Frame from CDN. A-Frame's package and CDN
+      // builds both bake their own super-three fork into the bundle, so
+      // cross-namespace WebGLRenderTarget / DataTexture traffic breaks the
+      // render. registerSparkAFrame is exercised against a minimal mock of
+      // A-Frame's globals — the same code paths run that would inside a
+      // bundler-resolved <a-scene>, and the render uses one shared THREE.
+      // See tmp/README.md "A-Frame fixture strategy".
 
       const sceneName = getSceneName();
       const sceneCfg = getScene(sceneName);
@@ -54,30 +63,61 @@
         sceneCfg.camera.lookAt[2],
       );
 
-      const spark = new SparkRenderer({
+      const systems = {};
+      const sceneElMock = {
         renderer,
-        enableLod: false,
-        minSortIntervalMs: 0,
-        ...(sceneCfg.sparkOverrides ?? {}),
+        object3D: scene,
+        camera,
+        hasLoaded: true,
+        systems,
+        addEventListener(_event, handler) {
+          if (typeof handler === "function") {
+            queueMicrotask(handler);
+          }
+        },
+      };
+
+      const aframeMock = {
+        THREE,
+        registerSystem(name, def) {
+          const instance = Object.create(def);
+          instance.el = sceneElMock;
+          if (typeof instance.init === "function") {
+            instance.init();
+          }
+          systems[name] = instance;
+        },
+        registerComponent(_name, _def) {
+          // The procedural scenes do not use spark-splat (URL-driven);
+          // component registration is a no-op for these fixtures.
+        },
+      };
+
+      registerSparkAFrame(aframeMock, {
+        sparkRendererOptions: {
+          enableLod: false,
+          minSortIntervalMs: 0,
+          ...(sceneCfg.sparkOverrides ?? {}),
+        },
       });
-      scene.add(spark);
 
       const built = await sceneCfg.build();
       scene.add(built.root);
+
+      const spark = systems.spark.spark;
       if (typeof built.postInit === "function") {
         await built.postInit({ spark, scene, camera, renderer });
       }
       if (typeof sceneCfg.time === "number") {
         spark.time = sceneCfg.time;
       }
-
       await spark.update({ scene, camera });
       renderer.render(scene, camera);
       await new Promise((resolve) => requestAnimationFrame(resolve));
       renderer.render(scene, camera);
 
-      window.sparkSnapshotReady = {
-        backend: "three",
+      window.sparkAFrameSnapshotReady = {
+        backend: "aframe",
         scene: sceneName,
         meshSplats: built.splatCount,
         activeSplats: spark.activeSplats,

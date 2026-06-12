@@ -127,7 +127,7 @@ Current parity status (2026-06-10):
 - **Three.js (native)** — Spark's home environment. The parity baseline.
 - **A-Frame** — bit-perfect against Three on the entire matrix. NOTE: today's `aframe-${scene}` captures exercise `registerSparkAFrame` against a structural mock, NOT a real `<a-scene>`, because A-Frame's npm and CDN builds both bundle `super-three@0.173.x` (cross-namespace Three would break splat rendering). Phase G of `MULTI-BACKEND-PARITY-PLAN.md` tracks vendoring a from-source A-Frame build for a real-scene gate.
 - **Babylon — texture-bridge MVP (default)** — bit-perfect against Three on every matrix scene at the 5% tolerance the texture path was designed for. Splats composite as a background `Layer`; Babylon meshes cannot occlude them.
-- **Babylon — native material (opt-in via `mode: "native"`)** — bit-perfect (0 / 786432 pixels differ) against Three on 18/19 matrix scenes. Splats render as a real Babylon `Mesh` inside the scene's render pass; Babylon meshes depth-sort against splats by construction. See `examples/spark-babylon-native/` for a working demo. The one exclusion is `envMap` — its `rubberduck.glb` non-splat Three mesh doesn't bridge to Babylon's render pass in native mode; rationale and follow-up captured next to the `NATIVE_BABYLON_SCENES` set in `tests/e2e/snapshot.spec.ts`.
+- **Babylon — native material (opt-in via `mode: "native"`)** — bit-perfect (0 / 786432 pixels differ) against Three on 18/19 matrix scenes. Splats render as a real Babylon `Mesh` inside the scene's render pass; Babylon meshes depth-sort against splats by construction. See `examples/spark-babylon-native/` for a working demo. The one exclusion is `envMap` — its `rubberduck.glb` non-splat Three mesh doesn't bridge to Babylon's render pass in native mode; rationale and follow-up captured next to the `NATIVE_BABYLON_SCENES` set in `test/e2e/snapshot.spec.ts`.
 
 How to apply this rule in day-to-day work:
 
@@ -574,7 +574,7 @@ A suitable `playwright.config.ts` would look like this:
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
-  testDir: "./tests/e2e",
+  testDir: "./test/e2e",
   fullyParallel: true,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [["github"], ["html"]] : [["html"]],
@@ -607,7 +607,7 @@ The configuration above is aligned with Playwright’s official guidance for con
 
 ### Test cases and fixtures
 
-I would build a shared fixture app at `tests/fixtures/viewer-app/` that accepts query parameters like `?backend=three`, `?backend=aframe`, and `?backend=babylon`, plus scenario IDs like `?scene=hello-world` and `?scene=raycasting`. Using the same scene data across all backends is critical; otherwise you will spend more time debugging test fixtures than debugging the renderer.
+I would build a shared fixture app at `test/fixtures/viewer-app/` that accepts query parameters like `?backend=three`, `?backend=aframe`, and `?backend=babylon`, plus scenario IDs like `?scene=hello-world` and `?scene=raycasting`. Using the same scene data across all backends is critical; otherwise you will spend more time debugging test fixtures than debugging the renderer.
 
 The first wave of high-value tests should be:
 
@@ -631,14 +631,14 @@ import { test, expect } from "@playwright/test";
 
 for (const backend of ["three", "aframe", "babylon"] as const) {
   test(`hello-world renders on ${backend}`, async ({ page }) => {
-    await page.goto(`/tests/fixtures/viewer-app/?scene=hello-world&backend=${backend}`);
+    await page.goto(`/test/fixtures/viewer-app/?scene=hello-world&backend=${backend}`);
     await expect(page.locator("[data-testid='spark-ready']")).toBeVisible();
     await expect(page).toHaveScreenshot(`hello-world-${backend}.png`);
   });
 }
 
 test("raycast reports selected splat", async ({ page }) => {
-  await page.goto(`/tests/fixtures/viewer-app/?scene=raycasting&backend=three`);
+  await page.goto(`/test/fixtures/viewer-app/?scene=raycasting&backend=three`);
   await page.mouse.click(640, 360);
   await expect(page.locator("[data-testid='selection-id']")).toContainText("selected:");
 });

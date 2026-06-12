@@ -4,8 +4,20 @@ examples/js/vendor
 examples/showcase/assets
 docs/CNAME
 node_modules/
+node_modules
+node_modules/**
+home/
+home/**
+playwright-report/
+test/results/
+test-results/
+test-results-*/
 tmp/
 site/
 site-repo/
 *.zip
 *.gltf
+
+# MemPalace per-project files (issue #185)
+mempalace.yaml
+entities.json

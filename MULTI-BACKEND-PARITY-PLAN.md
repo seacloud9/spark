@@ -161,7 +161,7 @@ Shipped components (commit chain `b820092` → `9b08d03`):
 - `src/backends/babylon/SparkBabylonMesh.ts` — Babylon `Mesh` with thin-instance quad geometry. Per-frame, invokes `spark.onBeforeRender` manually (native mode never triggers Three's render path that normally fires it), calls `initTexture` on the ordering texture so subsequent sorts find `__webglTexture`, drives the texture bridge + uniform sync, and sets `thinInstanceCount`. Identity matrix buffer grows with `spark.activeSplats`.
 - `src/backends/babylon/SparkBabylonTextureBridge.ts` — GPU readback for `ordering` (regular 2D, `framebufferTexture2D`) and `extSplats` / `extSplats2` (`WebGLArrayRenderTarget`, `framebufferTextureLayer` per MRT slot per layer). Bypasses Three's `readRenderTargetPixels` which silently rejects integer formats.
 - `src/backends/babylon/SparkBabylonHost.ts` — `mode: "texture" | "native"` flag. `babylonNative` constructor surface (separate from `babylon`) so texture-mode consumers do not have to import the extra Babylon symbols.
-- `tests/fixtures/snapshot-babylon.html` + `tests/e2e/snapshot.spec.ts` — `?mode=native` URL param, native captures + bit-perfect parity assertions across the scenes in `NATIVE_BABYLON_SCENES`.
+- `test/fixtures/snapshot-babylon.html` + `test/e2e/snapshot.spec.ts` — `?mode=native` URL param, native captures + bit-perfect parity assertions across the scenes in `NATIVE_BABYLON_SCENES`.
 
 Exit (achieved, exceeds planned):
 - **Babylon parity tolerance drops from 5% to bit-perfect** on every scene in `NATIVE_BABYLON_SCENES` (planned: 1%; actual: 0 / 786432 pixels differ).
@@ -175,21 +175,21 @@ Engine-aware example smoke coverage is complete for the Phase E surface:
 
 - Tier 6 multi-pass / portal examples now load through Three / A-Frame / Babylon: `multiple-viewpoints`, `portal`, `newportal`, `splat-portal`, `render-cube-depth`.
 - Tier 7 interactive examples already load through Three / A-Frame / Babylon: `raycasting`, `interactive-ripples`, `interactive-deform`, `interactive-holes`, `interactivity`, `splat-painter`.
-- The gallery guard in `tests/e2e/multibackend-smoke.spec.ts` asserts that every ordinary example row is `engine-aware`; the only non-engine-aware rows allowed are `editor`, `basic-xr`, `webxr`, `spark-babylon`, and `spark-babylon-native`.
+- The gallery guard in `test/e2e/multibackend-smoke.spec.ts` asserts that every ordinary example row is `engine-aware`; the only non-engine-aware rows allowed are `editor`, `basic-xr`, `webxr`, `spark-babylon`, and `spark-babylon-native`.
 
 Known caveat: `render-cube-depth`'s initial page load is gated across all three engines, but the checkbox-triggered cube readback (`offline.renderCubeMap()` + `readCubeTargets()`) still needs a focused interaction test before cube-readback parity is claimed.
 
 ### Phase F — Asset vendoring + CI hardening (in flight, 8/9 assets vendored)
 
-Today's parity matrix loads 9 distinct assets — 8 `.spz` / `.zip` and 1 `.glb`. As of `c78cbca` + the Phase F batch commit, 8 of 9 are vendored under `tests/fixtures/assets/` (and `tests/fixtures/assets/models/`).
+Today's parity matrix loads 9 distinct assets — 8 `.spz` / `.zip` and 1 `.glb`. As of `c78cbca` + the Phase F batch commit, 8 of 9 are vendored under `test/fixtures/assets/` (and `test/fixtures/assets/models/`).
 
 The one exclusion is `sutro.zip` (26 MB SOGS package). vite's dev-server static-file pipeline does not return it inside the network-scene `data-ready` timeout budget; the page hangs on fetch with no progress logs. The `sogs` scene falls through `splatUrl`'s CDN fallback. Vendoring sutro.zip needs either a separate static-asset server or git LFS — tracked as Phase F follow-up work.
 
 `scenes.mjs` carries two helpers:
-- `splatUrl(filename)`: returns `/tests/fixtures/assets/<filename>` if the filename is in `VENDORED_ASSETS`, otherwise `${ASSET_BASE}/splats/<filename>`.
+- `splatUrl(filename)`: returns `/test/fixtures/assets/<filename>` if the filename is in `VENDORED_ASSETS`, otherwise `${ASSET_BASE}/splats/<filename>`.
 - `modelUrl(filename)`: same shape for `/models/<filename>`.
 
-Adding a new scene with a new asset is a two-step process: (1) drop the file into `tests/fixtures/assets/` (or `models/`), (2) add the filename to the appropriate Set. No fixture change required.
+Adding a new scene with a new asset is a two-step process: (1) drop the file into `test/fixtures/assets/` (or `models/`), (2) add the filename to the appropriate Set. No fixture change required.
 
 Total disk footprint: ~57 MB in the working tree. Heavy but acceptable for plain git; if it crosses ~100 MB or starts hurting clone time a follow-up commit can switch the directory to git LFS.
 
@@ -197,13 +197,13 @@ Remaining for Phase F:
 - Tighten the Babylon network-scene timeout budget. Current limit (test 540s, goto 240s, data-ready 360s) was sized for cold-cache CDN fetches; with vendored assets every scene completes well inside that envelope. Shrink to roughly the procedural-scene budget once CI has run cleanly on vendored assets a few times.
 - Add a `git lfs` migration step if the vendored directory grows past ~100 MB.
 
-Verification (2026-06-09): targeted `pnpm exec playwright test tests/e2e/snapshot.spec.ts -g "depthOfField|dynamicLighting|envMap|sogs"` — 24/24 pass, **0 / 786432 pixels differ** on every three↔aframe and three↔babylon comparison. Capture timings (native Windows, three / aframe / babylon): depthOfField (valley.spz vendored) 11.8s / 6.1s / 27.1s; dynamicLighting (fireplace.spz vendored) 4.1s / 4.1s / 17.4s; envMap (fireplace.spz + rubberduck.glb vendored) 23.0s / 23.0s / 45.9s; sogs (sutro.zip CDN) 25.9s / 22.4s / 96s. Babylon-sogs is the long pole (sutro.zip download + SOGS fflate decode + texture-bridge readPixels overhead, all from a CDN-served zip) but lands well inside the 360s data-ready budget — no need to vendor sutro.zip ahead of the LFS migration.
+Verification (2026-06-09): targeted `pnpm exec playwright test test/e2e/snapshot.spec.ts -g "depthOfField|dynamicLighting|envMap|sogs"` — 24/24 pass, **0 / 786432 pixels differ** on every three↔aframe and three↔babylon comparison. Capture timings (native Windows, three / aframe / babylon): depthOfField (valley.spz vendored) 11.8s / 6.1s / 27.1s; dynamicLighting (fireplace.spz vendored) 4.1s / 4.1s / 17.4s; envMap (fireplace.spz + rubberduck.glb vendored) 23.0s / 23.0s / 45.9s; sogs (sutro.zip CDN) 25.9s / 22.4s / 96s. Babylon-sogs is the long pole (sutro.zip download + SOGS fflate decode + texture-bridge readPixels overhead, all from a CDN-served zip) but lands well inside the 360s data-ready budget — no need to vendor sutro.zip ahead of the LFS migration.
 
 Full-matrix verification (2026-06-09, WSL+/mnt/c, all 19 scenes): **116/116 pass, 0 / 786432 pixels differ** on every pair. Wall time 1.8h. Capture timing envelope under WSL was meaningfully slower than native Windows (Babylon sogs 4.7m WSL vs 96s native; Babylon envMap 3.9m WSL vs 45.9s native — WSL pays a /mnt/c filesystem-bridge tax on top of the existing texture-bridge readPixels cost). Procedural scene timeout bumped from Playwright's 30s default → 90s in the same change to absorb vite's cold prebundle on the first test (axes/three) without flaking the run. Page-nav timeouts (`page.goto` `timeout`) cut from 240s / 180s → 90s / 60s for Babylon / Three+A-Frame network scenes — page nav is dominated by initial HTML/JS load, not splat decode (that's the data-ready wait). `test.setTimeout` and data-ready budgets kept where they are; per the plan's "shrink once CI has run cleanly a few times" gate, broader cuts wait for additional clean runs.
 
 ### Phase G — Real A-Frame fixture via from-source build (≈ 4–6 commits, 1 session)
 
-**Problem.** Today's `aframe-${scene}` parity captures do not actually exercise A-Frame. The fixture (`tests/fixtures/snapshot-aframe.html`) constructs a structural mock of the AFRAME global (`registerSystem`, `registerComponent`, `THREE`) and hands Spark's own `THREE` to `registerSparkAFrame`. The render path that runs is "Spark Three through the A-Frame system/component lifecycle adapter" — bit-perfect against Three by construction. The mock proves:
+**Problem.** Today's `aframe-${scene}` parity captures do not actually exercise A-Frame. The fixture (`test/fixtures/snapshot-aframe.html`) constructs a structural mock of the AFRAME global (`registerSystem`, `registerComponent`, `THREE`) and hands Spark's own `THREE` to `registerSparkAFrame`. The render path that runs is "Spark Three through the A-Frame system/component lifecycle adapter" — bit-perfect against Three by construction. The mock proves:
 
 - `registerSparkAFrame` correctly registers the system + component on the supplied AFRAME-shaped surface.
 - The shader-chunk bridge mirrors `THREE.ShaderChunk` onto `AFRAME.THREE.ShaderChunk` (no-op when both share Three).
@@ -221,11 +221,11 @@ The mock exists because A-Frame's npm and CDN builds both bake `super-three@0.17
 
 **Deliverables.**
 
-1. **Vendored A-Frame build under `tests/fixtures/aframe-real/`.** Recipe: clone `aframevr/aframe` at a known-good tag, set `super-three` to alias `three@0.180` via package.json `overrides` (or replace `aframe-master/src/lib/three.js` to re-export from shared `three`), run the rollup build, drop the resulting `aframe.min.js` into the fixtures dir. Commit only the built artefact, not the build tree. Document the recipe in a `tests/fixtures/aframe-real/REBUILD.md` so the next person can refresh the bundle when A-Frame upstream moves.
+1. **Vendored A-Frame build under `test/fixtures/aframe-real/`.** Recipe: clone `aframevr/aframe` at a known-good tag, set `super-three` to alias `three@0.180` via package.json `overrides` (or replace `aframe-master/src/lib/three.js` to re-export from shared `three`), run the rollup build, drop the resulting `aframe.min.js` into the fixtures dir. Commit only the built artefact, not the build tree. Document the recipe in a `test/fixtures/aframe-real/REBUILD.md` so the next person can refresh the bundle when A-Frame upstream moves.
 
-2. **`tests/fixtures/snapshot-aframe-real.html`** — new fixture that loads the vendored bundle, builds a real `<a-scene>` element, registers Spark via `registerSparkAFrame(window.AFRAME, ...)`, attaches the scene's splat via the existing `<a-entity spark-splat="src: ...">` component for URL scenes or via direct `setObject3D` for procedural scenes (mirroring the existing `aframeMock.registerComponent` shape).
+2. **`test/fixtures/snapshot-aframe-real.html`** — new fixture that loads the vendored bundle, builds a real `<a-scene>` element, registers Spark via `registerSparkAFrame(window.AFRAME, ...)`, attaches the scene's splat via the existing `<a-entity spark-splat="src: ...">` component for URL scenes or via direct `setObject3D` for procedural scenes (mirroring the existing `aframeMock.registerComponent` shape).
 
-3. **`tests/e2e/snapshot.spec.ts` — new test variant per scene**: `aframe-real-${scene}.png` capture + a `Three vs A-Frame real parity (${scene})` assertion at the same tolerance the mock currently uses (`0.01`). Starts on procedural scenes first; expands once those go green.
+3. **`test/e2e/snapshot.spec.ts` — new test variant per scene**: `aframe-real-${scene}.png` capture + a `Three vs A-Frame real parity (${scene})` assertion at the same tolerance the mock currently uses (`0.01`). Starts on procedural scenes first; expands once those go green.
 
 4. **`src/backends/README.md` update.** Document the recipe and the gate's structural shape: mock fixture proves adapter wiring, real fixture proves the cross-namespace bridge actually fires inside a real A-Frame scene-render loop.
 
@@ -265,12 +265,12 @@ The current implementation uses `examples/js/spark-engine.js` as the shared host
 
 Verification for the final rollout slice:
 
-- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep newportal` — 3/3 pass.
-- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep portal` — 6/6 pass (`portal` and `newportal`).
-- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep "splat-portal"` — 3/3 pass.
-- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep "render-cube-depth"` — 3/3 pass.
-- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep lofi` — 3/3 pass.
-- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep "examples index"` — 2/2 pass, including the exception-set guard.
+- `pnpm exec playwright test test/e2e/multibackend-smoke.spec.ts --grep newportal` — 3/3 pass.
+- `pnpm exec playwright test test/e2e/multibackend-smoke.spec.ts --grep portal` — 6/6 pass (`portal` and `newportal`).
+- `pnpm exec playwright test test/e2e/multibackend-smoke.spec.ts --grep "splat-portal"` — 3/3 pass.
+- `pnpm exec playwright test test/e2e/multibackend-smoke.spec.ts --grep "render-cube-depth"` — 3/3 pass.
+- `pnpm exec playwright test test/e2e/multibackend-smoke.spec.ts --grep lofi` — 3/3 pass.
+- `pnpm exec playwright test test/e2e/multibackend-smoke.spec.ts --grep "examples index"` — 2/2 pass, including the exception-set guard.
 - `git diff --check` — clean across the touched example/helper/smoke files.
 
 Historical Phase A checkpoint follows for provenance.

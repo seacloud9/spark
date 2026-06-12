@@ -9,7 +9,7 @@ Spark ships first-class support for three render hosts:
 | BabylonJS | Texture-bridge MVP | `new babylon.SparkBabylonHost({ babylon, scene, width, height, ... })` | Hosts a Spark Three render as a Babylon `Layer` + `RawTexture`. |
 
 All three paths are verified pixel-perfect against each other on the parity
-matrix in `tests/e2e/snapshot.spec.ts` — see `tmp/README.md` for the matrix
+matrix in `test/e2e/snapshot.spec.ts` — see `tmp/README.md` for the matrix
 shape and per-scene results.
 
 ## Public API surface
@@ -216,7 +216,7 @@ real time.
   `SparkRenderer`'s Three scene do NOT render in Babylon's framebuffer
   — only the splat mesh is bridged across. The `envMap` matrix scene
   is the one excluded gate today; see the comment next to
-  `NATIVE_BABYLON_SCENES` in `tests/e2e/snapshot.spec.ts`.
+  `NATIVE_BABYLON_SCENES` in `test/e2e/snapshot.spec.ts`.
 - Per-frame CPU readback of the accumulator textures is still on the
   hot path. The shared-GL-context "Option B" eliminates it; that's a
   follow-up when a Tier 6 scene's frame budget breaks.
@@ -259,8 +259,8 @@ const { width, height } = adapter.getDrawingBufferSize();
 
 ## Parity gating
 
-Every scene in `tests/fixtures/scenes.mjs` is rendered through all three
-backends by `tests/e2e/snapshot.spec.ts` and compared via `pixelmatch`.
+Every scene in `test/fixtures/scenes.mjs` is rendered through all three
+backends by `test/e2e/snapshot.spec.ts` and compared via `pixelmatch`.
 Per-backend tolerances at the current matrix:
 
 | Backend | Tolerance | Notes |

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Spark Dist Three Render Fixture</title>
+    <style>
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="view" width="128" height="128"></canvas>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/examples/js/vendor/three/build/three.module.js",
+          "three/addons/": "/examples/js/vendor/three/examples/jsm/",
+          "@sparkjsdev/spark": "/dist/spark.module.js"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE from "three";
+      import {
+        constructAxes,
+        SparkRenderer,
+        SplatMesh,
+      } from "@sparkjsdev/spark";
+
+      const canvas = document.querySelector("#view");
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: false,
+        preserveDrawingBuffer: true,
+      });
+      renderer.setSize(128, 128, false);
+      renderer.setClearColor(0x10151c, 1);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(55, 1, 0.01, 10);
+      camera.position.set(0.45, 0.35, 1.8);
+      camera.lookAt(0, 0, 0);
+
+      const spark = new SparkRenderer({
+        renderer,
+        enableLod: false,
+        minSortIntervalMs: 0,
+      });
+      scene.add(spark);
+
+      const mesh = new SplatMesh({
+        constructSplats: (splats) => {
+          constructAxes({
+            splats,
+            scale: 0.3,
+            axisRadius: 0.025,
+            axisShadowScale: 1.4,
+          });
+        },
+      });
+      scene.add(mesh);
+      await mesh.initialized;
+
+      await spark.update({ scene, camera });
+      renderer.render(scene, camera);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      renderer.render(scene, camera);
+
+      const gl = renderer.getContext();
+      const pixels = new Uint8Array(128 * 128 * 4);
+      gl.readPixels(0, 0, 128, 128, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      let litPixels = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i] > 30 || pixels[i + 1] > 30 || pixels[i + 2] > 30) {
+          litPixels++;
+        }
+      }
+
+      window.sparkDistRenderFixture = {
+        activeSplats: spark.activeSplats,
+        meshSplats: mesh.numSplats,
+        litPixels,
+      };
+      document.body.dataset.ready = "true";
+    </script>
+  </body>
+</html>
