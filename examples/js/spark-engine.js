@@ -111,11 +111,19 @@ async function setupThreeBackend({
     add: (node) => scene.add(node),
     run: (tick) => {
       let lastTime = 0;
-      renderer.setAnimationLoop((t) => {
+      renderer.setAnimationLoop((t, xrFrame) => {
         const dt = t - (lastTime || t);
         lastTime = t;
-        tick?.(t, dt);
+        tick?.(t, dt, xrFrame);
         renderer.render(scene, camera);
+      });
+    },
+    runManual: (tick) => {
+      let lastTime = 0;
+      renderer.setAnimationLoop((t, xrFrame) => {
+        const dt = t - (lastTime || t);
+        lastTime = t;
+        tick?.(t, dt, xrFrame);
       });
     },
   };
@@ -210,6 +218,23 @@ async function setupBabylonBackend({
 
   await babylonScene.whenReadyAsync();
 
+  function presentCurrentThreeFrame() {
+    if (host.mode !== "texture") return host.renderOnce();
+
+    const gl = host.threeRenderer.getContext();
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    gl.readPixels(
+      0,
+      0,
+      host.width,
+      host.height,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      host.pixels,
+    );
+    host.texture.update(host.pixels);
+  }
+
   return {
     engine: "babylon",
     scene: host.threeScene,
@@ -229,6 +254,17 @@ async function setupBabylonBackend({
         lastTime = t;
         tick?.(t, dt);
         await host.renderOnce();
+        babylonScene.render();
+      });
+    },
+    runManual: (tick) => {
+      let lastTime = 0;
+      engine.runRenderLoop(async () => {
+        const t = performance.now();
+        const dt = t - (lastTime || t);
+        lastTime = t;
+        await tick?.(t, dt);
+        await presentCurrentThreeFrame();
         babylonScene.render();
       });
     },

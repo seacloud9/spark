@@ -14,6 +14,9 @@
     #canvas {
       position: absolute;
       touch-action: none;
+      width: 100vw;
+      height: 100vh;
+      display: block;
     }
     #instructions {
       position: absolute;
@@ -33,6 +36,7 @@
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
         "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
         "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
       }
     }
@@ -43,7 +47,8 @@
   <script type="module">
     import * as THREE from "three";
     import GUI from "lil-gui";
-    import { SparkRenderer, PackedSplats, SplatMesh, SparkControls, SparkXr, JOINT_IDS, JOINT_TIPS, dyno, generators, isMobile, utils } from "@sparkjsdev/spark";
+    import { PackedSplats, SplatMesh, SparkControls, SparkXr, JOINT_IDS, JOINT_TIPS, dyno, generators, isMobile, utils } from "@sparkjsdev/spark";
+    import { setupSparkExample } from "../js/spark-engine.js";
     import { WORLDS, getWorldUrl, WORLD_RUSTLE, WORLD_EFFECT } from "./worlds.js";
     import { AUDIOS, getAudioUrl } from "./audio.js";
     import { shuffleArray } from "./util.js";
@@ -146,34 +151,35 @@
       playCurrent();
     });
 
-    const scene = new THREE.Scene();
+    const env = await setupSparkExample({
+      canvas: document.getElementById("canvas"),
+      cameraConfig: {
+        fov: 65,
+        near: 0.01,
+        far: 1000,
+        position: [0, 0, 0],
+        lookAt: [0, 0, -1],
+      },
+      clearColor: 0x000000,
+      sparkOptions: {
+        maxStdDev: Math.sqrt(4),
+        view: { sort360: true, sort32: true },
+      },
+    });
+    const scene = env.scene;
     scene.background = new THREE.Color(0, 0, 0);
-    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.01, 1000);
-    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("canvas") });
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    const camera = env.camera;
+    const renderer = env.renderer;
+    const spark = env.spark;
 
     scene.add(new THREE.AmbientLight(0x4444ff, 0.1));
     scene.add(new THREE.DirectionalLight(0xffffcc, 1.0));
-
-    window.addEventListener("resize", onWindowResize, false);
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
 
     // Make a local frame of reference that we can move to control
     // the camera, or as a frame of reference in WebXR mode
     const localFrame = new THREE.Group();
     scene.add(localFrame);
 
-    const spark = new SparkRenderer({
-      renderer,
-      // Lower the splat rendering width to sqrt(4) std devs for more performance
-      maxStdDev: Math.sqrt(4),
-      view: { sort360: true, sort32: true },
-    });
-    scene.add(spark);
     console.log("SPARK: ", spark);
 
     localFrame.add(camera);
@@ -211,82 +217,97 @@
       return button;
     }
 
-    const xr = new SparkXr({
-      renderer,
-      onMouseLeaveOpacity: 0.5,
-      enableHands: true,
-      frameBufferScaleFactor: 0.5,
-      referenceSpaceType: "local-floor",
-      onEnterXr: () => {
-        play();
-        idleBee.position.set(0, 0, 0);
-        idleBee.quaternion.set(0, 0, 0, 1);
-      },
-      onExitXr: () => {
-        pause();
-      },
-      onReady: (supported) => {
-        let element = xr.element;
-        let button = null;
-        
-        if (!supported) {
-          button = makePlayButton();
-          element = button;
-        }
+    function mountDesktopInstructions() {
+      const div = document.createElement("div");
+      if (isMobile()) {
+        document.getElementById("instructions").style.top = "50px";
+        div.innerHTML = `
+          <div>
+            <div>👆 Look around</div>
+            <div>👆👆 Move</div>
+          </div>
+        `;
+      } else {
+        div.innerHTML = `
+          <div>
+            <div><u>WASDRF</u> to move, mouse <strong>Click 👆</strong> to turn, <strong>Middle / 👆👆</strong> for XZ slide, <strong>Right / 👆👆+Click</strong> for XY slide</div>
+            <div><strong>[ ]</strong> to switch worlds</div>
+          </div>
+        `;
+      }
+      document.getElementById("instructions")?.appendChild(div);
+      return div;
+    }
 
-        element.addEventListener("click", () => {
-          if (audio.paused) {
-            play();
-            if (button) {
-              button.textContent = "Pause";
-            }
-          } else {
-            pause();
-            if (button) {
-              button.textContent = "Play";
-            }
+    function bindPlayToggle(element, button = null) {
+      element.addEventListener("click", () => {
+        if (audio.paused) {
+          play();
+          if (button) {
+            button.textContent = "Pause";
           }
-        });
-
-        if (supported) {
-          const div = document.createElement("div");
-          // div.innerHTML = "In VR: <u>Touch the world</u> with your hands. <u>Tap wrists together</u> to toggle spotlight mode.";
-          div.innerHTML = `
-            <div>
-              <div>Click ENTER VR to begin</div>
-              <div>Enable hand tracking - <strong>Touch the world</strong></div>
-              <div><strong>Tap wrists together</strong> - Toggle spotlights</div>
-            </div>
-          `;
-          document.getElementById("instructions")?.appendChild(div);
         } else {
-          const div = document.createElement("div");
-          if (isMobile()) {
-            document.getElementById("instructions").style.top = "50px";
-            div.innerHTML = `
-              <div>
-                <div>👆 Look around</div>
-                <div>👆👆 Move</div>
-              </div>
-            `;
-          } else {
-            div.innerHTML = `
-              <div>
-                <div><u>WASDRF</u> to move, mouse <strong>Click 👆</strong> to turn, <strong>Middle / 👆👆</strong> for XZ slide, <strong>Right / 👆👆+Click</strong> for XY slide</div>
-                <div><strong>[ ]</strong> to switch worlds</div>
-              </div>
-            `;
+          pause();
+          if (button) {
+            button.textContent = "Play";
           }
-          document.getElementById("instructions")?.appendChild(div);
         }
-      },
-    });
+      });
+    }
 
-    const controls = new SparkControls({ canvas: renderer.domElement });
+    let xr = null;
+    if (env.engine === "three") {
+      xr = new SparkXr({
+        renderer,
+        onMouseLeaveOpacity: 0.5,
+        enableHands: true,
+        frameBufferScaleFactor: 0.5,
+        referenceSpaceType: "local-floor",
+        onEnterXr: () => {
+          play();
+          idleBee.position.set(0, 0, 0);
+          idleBee.quaternion.set(0, 0, 0, 1);
+        },
+        onExitXr: () => {
+          pause();
+        },
+        onReady: (supported) => {
+          let element = xr.element;
+          let button = null;
+
+          if (!supported) {
+            button = makePlayButton();
+            element = button;
+          }
+
+          bindPlayToggle(element, button);
+
+          if (supported) {
+            const div = document.createElement("div");
+            // div.innerHTML = "In VR: <u>Touch the world</u> with your hands. <u>Tap wrists together</u> to toggle spotlight mode.";
+            div.innerHTML = `
+              <div>
+                <div>Click ENTER VR to begin</div>
+                <div>Enable hand tracking - <strong>Touch the world</strong></div>
+                <div><strong>Tap wrists together</strong> - Toggle spotlights</div>
+              </div>
+            `;
+            document.getElementById("instructions")?.appendChild(div);
+          } else {
+            mountDesktopInstructions();
+          }
+        },
+      });
+    } else {
+      const button = makePlayButton();
+      bindPlayToggle(button, button);
+      mountDesktopInstructions();
+    }
+
+    const controls = new SparkControls({ canvas: env.canvas });
     // controls.fpsMovement.xr = renderer.xr;
     controls.pointerControls.rotateSpeed *= 2.0;
 
-    let lastTime = 0;
     let transitionTotal = 0;
     let lastWristsTouching = null;
     let handMode = 0;
@@ -761,15 +782,18 @@
     const stats = new Stats();
     // document.body.appendChild(stats.dom);
 
-    renderer.setAnimationLoop(function animate(time, xrFrame) {
+    function isXrPresenting() {
+      return renderer.xr?.isPresenting === true;
+    }
+
+    env.run((time, deltaTime, xrFrame) => {
       stats.begin();
 
-      const deltaTime = time - (lastTime || time);
-      lastTime = time;
-
-      xr.updateControllers(camera);
-      xr.updateHands({ xrFrame });
-      updateHands(xr);
+      if (xr) {
+        xr.updateControllers(camera);
+        xr.updateHands({ xrFrame });
+        updateHands(xr);
+      }
 
       globalT.value = time / 1000;
       if (curWorld != null) {
@@ -785,7 +809,7 @@
         world.updateVersion();
       }
 
-      if (renderer.xr.isPresenting) {
+      if (isXrPresenting()) {
         if (!audio.paused) {
           idleBee.position.z += (deltaTime / 1000) * (1 / transitionInterval.value);
         }
@@ -846,7 +870,7 @@
               return { gsplat };
             });
             transitionT.value = 0;
-            idleBeeTranslate.value = renderer.xr.isPresenting ? idleBee.position.z : 0;
+            idleBeeTranslate.value = isXrPresenting() ? idleBee.position.z : 0;
             world.updateGenerator();
             updateSceneEffect(WORLDS[target]);
 
@@ -862,7 +886,7 @@
                 curWorld = target;
                 world.packedSplats = next;
                 world.objectModifier = undefined;
-                idleBee.position.z -= renderer.xr.isPresenting ? idleBeeTranslate.value : 0;
+                idleBee.position.z -= isXrPresenting() ? idleBeeTranslate.value : 0;
                 world.updateGenerator();
                 console.log("Transition complete");
 
@@ -879,8 +903,6 @@
           }
         }
       }
-
-      renderer.render(scene, camera);
 
       stats.end();
     });

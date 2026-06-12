@@ -34,7 +34,8 @@
       "imports": {
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
-        "@sparkjsdev/spark": "../../dist/spark.module.js"
+        "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm"
       }
     }
   </script>
@@ -43,23 +44,22 @@
     import { SplatMesh, SparkRenderer, PackedSplats, SparkControls, dyno } from "@sparkjsdev/spark";
     import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
     import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.y = 0.5;
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    window.addEventListener('resize', onWindowResize, false);
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
+    const env = await setupSparkExample({
+      cameraConfig: {
+        fov: 75,
+        near: 0.1,
+        far: 1000,
+        position: [0, 0.5, 0],
+        lookAt: [0, 0.5, -1],
+      },
+      clearColor: 0x000000,
+    });
+    const scene = env.scene;
+    const camera = env.camera;
+    const renderer = env.renderer;
+    const spark = env.spark;
 
     const splatURL = await getAssetFileURL("fireplace.spz");
     const packedSplats = new PackedSplats({ url: splatURL });
@@ -187,14 +187,10 @@
       }
     };
 
-    const controls = new SparkControls({ canvas: renderer.domElement });
+    const controls = new SparkControls({ canvas: env.canvas });
 
-    let lastTime;
-    renderer.setAnimationLoop(async function animate(time) {
-      const deltaTime = time - (lastTime || time);
-      lastTime = time;
+    env.run((time, deltaTime) => {
       controls.update(camera);
-      renderer.render(scene, camera);
       duck.rotation.y += deltaTime / 2500;
     });
   </script>

@@ -1,12 +1,25 @@
 import { SparkControls, SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
 import * as THREE from "three";
 import { getAssetFileURL } from "/examples/js/get-asset-url.js";
+import { setupSparkExample } from "/examples/js/spark-engine.js";
 
 const canvas = document.getElementById("canvas");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
-renderer.setClearColor(0x000000, 1);
+const env = await setupSparkExample({
+  canvas,
+  cameraConfig: {
+    fov: 50,
+    near: 0.01,
+    far: 2000,
+    position: [0, 1, 3],
+    lookAt: [0, 1, 0],
+  },
+  clearColor: 0x000000,
+});
+const renderer = env.renderer;
+const camera = env.camera;
+
+env.scene.remove(env.spark);
+env.spark.dispose();
 
 // Two independent scenes (world A and world B)
 const sceneA = new THREE.Scene();
@@ -15,16 +28,6 @@ const sparkA = new SparkRenderer({ renderer });
 const sparkB = new SparkRenderer({ renderer });
 sceneA.add(sparkA);
 sceneB.add(sparkB);
-
-// Main camera (not parented to scenes)
-const camera = new THREE.PerspectiveCamera(
-  50,
-  canvas.clientWidth / canvas.clientHeight,
-  0.01,
-  2000,
-);
-camera.position.set(0, 1, 3);
-camera.lookAt(0, 1, 0);
 
 // Offscreen render targets for portal views
 const rtAtoB = new THREE.WebGLRenderTarget(
@@ -66,7 +69,6 @@ function resizeRenderTargets(width, height) {
 function handleResize() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
-  renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   resizeRenderTargets(w, h);
@@ -74,7 +76,7 @@ function handleResize() {
 window.addEventListener("resize", handleResize);
 
 // Camera controls with mouse and WASD enabled
-const controls = new SparkControls({ canvas: renderer.domElement });
+const controls = new SparkControls({ canvas: env.canvas });
 controls.fpsMovement.enable = true;
 controls.pointerControls.enable = true;
 
@@ -304,7 +306,7 @@ async function run() {
     return d <= radius;
   }
 
-  renderer.setAnimationLoop((timeMs) => {
+  env.runManual((timeMs) => {
     // Decrease cooldown timer
     if (teleportCooldown > 0) {
       teleportCooldown -= 16; // assuming ~60fps
@@ -402,4 +404,4 @@ async function run() {
   });
 }
 
-run();
+await run();

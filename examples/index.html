@@ -126,12 +126,12 @@
         <p style="margin: 0 0 6px">
           <strong style="color: #6c6">●</strong> <em>engine-aware:</em> the
           example honours <code>?engine=three|aframe|babylon</code> and
-          renders through the selected backend. Currently being rolled out
-          per example. <strong style="color: #555">○</strong>
-          <em>three-only:</em> ignores the query param today — the
-          <code>aframe</code> and <code>babylon</code> links still take you
-          to the page but render through plain Three until that example is
-          ported. See
+          renders through the selected backend. <strong style="color: #555"
+            >○</strong
+          >
+          <em>exception/showcase:</em> either a headset-only XR/editor
+          surface that is intentionally outside the backend smoke gate, or
+          a Babylon host reference page that is already Babylon-specific. See
           <a href="../src/backends/README.md">src/backends/README.md</a>
           and
           <a href="../MULTI-BACKEND-PARITY-PLAN.md"
@@ -142,9 +142,9 @@
         <p style="margin: 0">
           A-Frame parity uses a structural AFRAME mock (npm/CDN A-Frame
           bundles its own Three.js fork and renders blank against
-          Spark's). Babylon uses the texture-bridge MVP — splats render
-          inside a Babylon scene but Babylon meshes draw over them; the
-          native material backend is on the way.
+          Spark's). Engine-aware example pages use Babylon's texture bridge
+          by default; the <code>spark-babylon-native</code> reference page
+          demonstrates native Babylon mesh depth-sorting.
         </p>
       </div>
 
@@ -509,7 +509,7 @@
               >
             </td>
           </tr>
-          <tr>
+          <tr class="engine-aware">
             <td class="name">lofi</td>
             <td class="desc">Lo-fi visual effect pipeline.</td>
             <td class="engines">
@@ -543,7 +543,7 @@
               >
             </td>
           </tr>
-          <tr>
+          <tr class="engine-aware">
             <td class="name">portal</td>
             <td class="desc">SparkPortals two-pass portal effect.</td>
             <td class="engines">
@@ -554,7 +554,7 @@
               >
             </td>
           </tr>
-          <tr>
+          <tr class="engine-aware">
             <td class="name">newportal</td>
             <td class="desc">Reworked portal demo.</td>
             <td class="engines">
@@ -567,7 +567,7 @@
               >
             </td>
           </tr>
-          <tr>
+          <tr class="engine-aware">
             <td class="name">splat-portal</td>
             <td class="desc">Portal between splat scenes.</td>
             <td class="engines">
@@ -580,7 +580,7 @@
               >
             </td>
           </tr>
-          <tr>
+          <tr class="engine-aware">
             <td class="name">render-cube-depth</td>
             <td class="desc">
               Render cube depth pass + rubber duck reflection.

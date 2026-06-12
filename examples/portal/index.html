@@ -22,6 +22,7 @@
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
         "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
         "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
       }
     }
@@ -29,55 +30,48 @@
   <script src="https://cdn.jsdelivr.net/npm/stats.js@0.17.0/build/stats.min.js"></script>
   <script type="module">
     import * as THREE from "three";
-    import { SparkRenderer, PackedSplats, ExtSplats, SplatMesh, SplatEdit, SplatEditRgbaBlendMode, SplatEditSdf, SplatEditSdfType, SparkControls, SparkXr, textSplats, SplatSkinning } from "@sparkjsdev/spark";
+    import { SparkRenderer, SplatMesh, SparkControls } from "@sparkjsdev/spark";
     import GUI from "lil-gui";
+    import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
-    const ENABLE_EXT_SPLATS = false;
     const RENDER_TIMEOUT_MS = 120 * 1000;
 
     const stats = new Stats();
     document.body.appendChild(stats.dom);
 
-    const URL_BASE = ".";
-    // const URL_BASE = "https://storage.googleapis.com/forge-dev-public/asundqui/memory-house-scene/memory-house";
-    // const URL_BASE = "./memory-house";
-    // const URL_BASE = "https://storage.googleapis.com/forge-dev-public/asundqui/hobbitverse";
-
     const universe = {
-      "cozy_cottage": {
-        "url": "./cozy_cottage-lod.spz",
-        "position": [0, -1, 0],
-        "quaternion": [0, 0, 0, 1],
-      },
-      "toad": {
-        "url": `${URL_BASE}/toad-lod.spz`,
-        "position": [0.5,0,-0.5],
-        "quaternion": [0.15645282834721824,-0.04146967440804525,0.9867925564627197,0.00657488527784835],
-      },
-      "turkey": {
-        "url": `${URL_BASE}/turkey-lod.spz`,
-        "position": [0,0,-2],
-        "quaternion": [-0.443958268524857,-0.050133086580300315,0.8942976756110581,-0.02488768440417606],
-      },
       "butterfly": {
-        "url": `${URL_BASE}/butterfly-ai-lod.spz`,
-        "position": [-1,0,-4.5],
-        "quaternion": [-0.28968658389767193,-0.00646881131936965,0.9570976983098036,-0.0019579274470059634],
+        "asset": "butterfly.spz",
+        "position": [0, 0, -3],
+        "quaternion": [1, 0, 0, 0],
       },
-      "snowbot": {
-        "url": `${URL_BASE}/snowbot-lod.spz`,
-        "position": [-3.5,0,-5],
+      "cat": {
+        "asset": "cat.spz",
+        "position": [-3, -0.7, -4.5],
         "quaternion": [1,0,0,0],
+        "scale": 0.8,
       },
     };
 
     console.log("universe", universe);
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    const env = await setupSparkExample({
+      cameraConfig: {
+        fov: 90,
+        near: 0.1,
+        far: 1000,
+        position: [0, 0, 0],
+        lookAt: [0, 0, -1],
+      },
+      clearColor: 0x000000,
+    });
+    const scene = env.scene;
+    const camera = env.camera;
+    const renderer = env.renderer;
+
+    scene.remove(env.spark);
+    env.spark.dispose();
 
     const camera2 = camera.clone();
     scene.add(camera2);
@@ -91,11 +85,8 @@
 
     window.addEventListener("resize", onWindowResize, false);
     function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
       camera2.aspect = camera.aspect;
       camera2.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
     // Make a local frame of reference that we can move to control
@@ -302,40 +293,12 @@
 
     async function loadUniverse() {
       for (const key of Object.keys(universe)) {
-        const { url, position, quaternion, scale, opacity } = universe[key];
+        const { asset, position, quaternion, scale, opacity } = universe[key];
+        const url = await getAssetFileURL(asset);
         console.log("Loading", key, url, position, quaternion, scale, opacity);
         const absoluteURL = new URL(url, window.location.href).href;
-        const isCharacter = key.startsWith("toad") || key.startsWith("butterfly") || key.startsWith("turkey") || key.startsWith("snowbot");
 
-        let packedSplats = undefined;
-        let extSplats = undefined;
-
-        if (isCharacter) {
-          packedSplats = new PackedSplats({
-            url: absoluteURL,
-            lod: true,
-            maxBoneSplats: isCharacter ? 16 : undefined,
-            computeBoneWeights: isCharacter,
-            minBoneOpacity: 0.5,
-          });
-          await packedSplats.initialized;
-          console.log("Loaded PackedSplats", key, packedSplats);
-        } else {
-          if (ENABLE_EXT_SPLATS) {
-            extSplats = new ExtSplats({
-              url: absoluteURL,
-            });
-            console.log("Loaded ExtSplats", key, extSplats);
-          } else {
-            packedSplats = new PackedSplats({ url: absoluteURL });
-            console.log("Loaded PackedSplats", key, packedSplats);
-          }
-        }
-
-        const mesh = new SplatMesh({
-          packedSplats,
-          extSplats,
-        });
+        const mesh = new SplatMesh({ url: absoluteURL });
         await mesh.initialized;
 
         mesh.position.fromArray(position ?? [0, 0, 0]);
@@ -357,39 +320,14 @@
             mesh.opacity = meshOpacity;
           },
         });
-
-        if (isCharacter) {
-          const skinning = new SplatSkinning({
-            mesh,
-            numSplats: mesh.packedSplats.lodSplats.numSplats,
-            numBones: mesh.packedSplats.boneSplats.numSplats,
-          });
-          skinning.skinData.set(mesh.packedSplats.lodSplats.extra.boneWeights);
-
-          mesh.packedSplats.boneSplats.forEachSplat((index, center, scales, quaternion, opacity, color) => {
-            skinning.setRestQuatPos(index, quaternion, center);
-          });
-          mesh.skinning = skinning;
-
-          mesh.onFrame = ({ mesh, time, deltaTime }) => {
-            mesh.packedSplats.boneSplats.forEachSplat((index, center, scales, quaternion, opacity, color) => {
-              skinning.getRestQuatPos(index, quaternion, center);
-
-              const avgScale = (scales.x + scales.y + scales.z) / 3;
-              center.x += Math.sin(time) * 0.15 * 1/Math.log(avgScale);
-              skinning.setBoneQuatPos(index, quaternion, center);
-            });
-            skinning.updateBones();
-          };
-        }
       }
     }
 
-    loadUniverse();
+    await loadUniverse();
 
     const controls = new SparkControls({
       renderer,
-      canvas: renderer.domElement,
+      canvas: env.canvas,
     });
 
     // const xr = new SparkXr({
@@ -417,7 +355,6 @@
     //   },
     // });
 
-    let lastTime = 0;
     let rotation = 0;
     let xrTime = 0;
 
@@ -441,11 +378,8 @@
       }
     });
 
-    renderer.setAnimationLoop(function animate(time, xrFrame) {
+    env.runManual((time, deltaTime) => {
       stats.begin();
-
-      const deltaTime = time - (lastTime || time);
-      lastTime = time;
 
       controls.update(localFrame);
 

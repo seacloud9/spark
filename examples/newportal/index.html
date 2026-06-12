@@ -22,6 +22,7 @@
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
         "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
         "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
       }
     }
@@ -31,26 +32,33 @@
     import * as THREE from "three";
     import {
       SparkPortals,
-      PackedSplats,
       SplatMesh,
       SparkControls,
     } from "@sparkjsdev/spark";
     import GUI from "lil-gui";
+    import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
     // ========== Setup ==========
     const stats = new Stats();
     document.body.appendChild(stats.dom);
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(
-      90,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    const env = await setupSparkExample({
+      cameraConfig: {
+        fov: 90,
+        near: 0.1,
+        far: 1000,
+        position: [0, 0, 0],
+        lookAt: [0, 0, -1],
+      },
+      clearColor: 0x000000,
+    });
+    const scene = env.scene;
+    const camera = env.camera;
+    const renderer = env.renderer;
+
+    scene.remove(env.spark);
+    env.spark.dispose();
 
     // Local frame for camera (used for movement and teleportation)
     const localFrame = new THREE.Group();
@@ -88,34 +96,29 @@
     pair2.exitPortal.position.set(5, 0, -8);
 
     // ========== Load Splat Assets ==========
-    const URL_BASE = "./splats/";
-
-    async function loadCozyCottage() {
-      let url = `${URL_BASE}/cozy_cottage-lod-0.spz`;
+    async function loadPortalSplat() {
+      const url = await getAssetFileURL("butterfly.spz");
 
       console.log("Loading", url);
 
       const absoluteURL = new URL(url, window.location.href).href;
 
-      // const packedSplats = new PackedSplats({ url: absoluteURL });
-      // const mesh = new SplatMesh({ packedSplats });
-
-      const mesh = new SplatMesh({ url: absoluteURL, paged: true });
+      const mesh = new SplatMesh({ url: absoluteURL });
       await mesh.initialized;
 
-      mesh.position.fromArray([0, -1, 0]);
-      mesh.quaternion.fromArray([0, 0, 0, 1]);
+      mesh.position.fromArray([0, 0, -3]);
+      mesh.quaternion.fromArray([1, 0, 0, 0]);
 
       scene.add(mesh);
       console.log("Loaded", url);
     }
 
-    loadCozyCottage();
+    await loadPortalSplat();
 
     // ========== Controls ==========
     const controls = new SparkControls({
       renderer,
-      canvas: renderer.domElement,
+      canvas: env.canvas,
     });
 
     // ========== GUI ==========
@@ -157,15 +160,11 @@
     pair1ExitFolder.close();
     pair2Folder.close();
 
-    // ========== Resize Handler ==========
     window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
       portals.updateAspect(camera.aspect);
-      renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    renderer.setAnimationLoop(function animate(time) {
+    env.runManual(() => {
       stats.begin();
 
       // Update controls

@@ -1,15 +1,16 @@
 # Claude handoff: Spark multi-backend rollout
 
 Date: 2026-06-11 (post engine-aware rollout push).
+Codex continuation update: 2026-06-12.
 
 ## Headline numbers
 
 - **Parity matrix:** 27 scenes. Bit-perfect 0/786432 px diff on every Three vs A-Frame vs Babylon-texture pair. Babylon-native bit-perfect on **26/27** (envMap remains the documented native exclusion).
-- **Engine-aware live coverage:** **31/41 examples (76%)**, up from 21/41 (51%) at the start of the 2026-06-11 session.
+- **Engine-aware live coverage:** all ordinary examples are now engine-aware and exposed from `examples/index.html`. The only non-engine-aware rows are the documented exceptions/showcases: `editor`, `basic-xr`, `webxr`, `spark-babylon`, `spark-babylon-native`.
 - **Tier 4 (time-driven animation):** CLOSED OUT.
 - **Tier 7 (interactive):** CLOSED OUT.
-- **Tier 5 shader-driven:** 4/5 done (lofi remains).
-- **Tier 6 multi-pass / multi-camera:** 1/5 done (`multiple-viewpoints` shipped — validates texture-bridge survives Three-side secondary-SparkRenderer multi-pass). Four portal variants follow the same template.
+- **Tier 5 shader-driven:** CLOSED OUT for engine-aware smoke coverage (`lofi` now gates Three / A-Frame / Babylon load).
+- **Tier 6 multi-pass / multi-camera:** CLOSED OUT for engine-aware smoke coverage (`multiple-viewpoints`, `portal`, `newportal`, `splat-portal`, `render-cube-depth` all gate Three / A-Frame / Babylon load).
 
 ## What landed on 2026-06-11 (8 commits, all on `main`)
 
@@ -26,7 +27,7 @@ Last commit before session: `024deba`. After: `c571ad1`.
 | 7 | `c01b323` | feat(examples) | viewer engine-aware (3/3 smoke) |
 | 8 | `c571ad1` | feat(examples) | multiple-viewpoints engine-aware — first Tier 6 multi-pass port, validates texture-bridge survival (3/3 smoke) |
 
-## Helper change worth knowing
+## Helper changes worth knowing
 
 `examples/js/spark-engine.js` gained `env.canvas` (in commit `d571cb2`). It is the VISIBLE top-of-DOM canvas:
 - Three / A-Frame: identical to `env.renderer.domElement`.
@@ -34,25 +35,25 @@ Last commit before session: `024deba`. After: `c571ad1`.
 
 **Always bind input controls to `env.canvas`:** PointerControls, SparkControls, OrbitControls, raycast click handlers, drag/drop targets. Every Tier 7 port in this session uses this pattern.
 
-## What's left (10 examples)
+The Codex continuation added `env.runManual(tick)` for examples that own their render pass (`portal`, `splat-portal`, `newportal`). Three/A-Frame call `tick(time, dtMs, xrFrame)` without the helper's automatic `renderer.render`. Babylon calls the same tick, then presents the already-rendered offscreen Three canvas through the texture bridge before `babylonScene.render()`.
 
-### 4 Tier 6 multi-pass — next-session primary target
+`env.run(tick)` now forwards the optional `xrFrame` argument on the Three path. This keeps `lofi`'s XR hand-update path alive on native Three while A-Frame/Babylon run the desktop path.
 
-`multiple-viewpoints` shipped in `c571ad1` and **validated the texture-bridge hypothesis**: a secondary `SparkRenderer` with `target: { width, height, doubleBuffer: true }` runs the multi-pass entirely on the Three side, and Babylon's texture-bridge composites the final Three canvas as a Layer — so the offscreen render stays valid WITHOUT needing Babylon multi-camera support. The four remaining variants follow the same template.
+## What's left
 
-Listed in order of estimated portability:
+No ordinary example is left to port for engine-aware smoke coverage. `tests/e2e/multibackend-smoke.spec.ts` now has two index guards:
 
-1. **`portal`**, **`newportal`**, **`splat-portal`** — Same secondary-SparkRenderer + RenderTarget shape as multiple-viewpoints. Apply the same template (commit `c571ad1` is the canonical reference).
-2. **`render-cube-depth`** — Offline SparkRenderer for depth cube. Verify the cube target survives the bridge (the multiple-viewpoints test was a 2D `target`; a cube target may need different handling).
-
-### 1 Tier 5 — `lofi`
-
-Has SparkXr (WebXR), audio carousel, world transitions, and SparkRenderer XR animation loop with `xrFrame`. Needs XR-gated init (skip SparkXr instantiation on babylon/aframe modes). Audio playback and worlds cache are backend-agnostic and stay intact. ~890 lines so non-trivial but mechanical.
+- every `ENGINE_AWARE_EXAMPLES` row must be marked `class="engine-aware"` and expose A-Frame/Babylon links;
+- the only allowed non-engine-aware rows are exactly `editor`, `basic-xr`, `webxr`, `spark-babylon`, `spark-babylon-native`.
 
 ### Do NOT port
 
 - **`spark-babylon`**, **`spark-babylon-native`** — Babylon host showcases by design. The whole point is they demonstrate the Babylon host directly; engine-switching them would defeat the purpose.
-- **`basic-xr`**, **`webxr`**, **`editor`** — Documented Tier 8 non-gatable exceptions in AGENTS.md.
+- **`basic-xr`**, **`webxr`**, **`editor`** — Documented non-gatable exceptions. XR requires headset session semantics; editor chrome parity is lower value than the splat/runtime coverage already gated elsewhere.
+
+### Known caveat
+
+`render-cube-depth`'s initial page now loads across Three / A-Frame / Babylon. Its checkbox-triggered `offline.renderCubeMap()` + `readCubeTargets()` path is preserved but was not exercised by the engine-aware smoke test; add a focused interaction test before claiming cube-readback parity.
 
 ## Engine-aware port template
 

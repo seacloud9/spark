@@ -27,6 +27,7 @@ const ENGINE_AWARE_EXAMPLES = [
   "splat-dissolve-effects",
   "splat-reveal-effects",
   "splat-shader-effects",
+  "lofi",
   "raycasting",
   "particle-animation",
   "particle-simulation",
@@ -38,6 +39,18 @@ const ENGINE_AWARE_EXAMPLES = [
   "splat-painter",
   "viewer",
   "multiple-viewpoints",
+  "newportal",
+  "portal",
+  "splat-portal",
+  "render-cube-depth",
+];
+
+const NON_ENGINE_AWARE_EXAMPLES = [
+  "editor",
+  "basic-xr",
+  "webxr",
+  "spark-babylon",
+  "spark-babylon-native",
 ];
 
 test("examples index shows engine-aware bullet for every ported example", async ({
@@ -59,6 +72,22 @@ test("examples index shows engine-aware bullet for every ported example", async 
       row.locator(`td.engines a.babylon`),
     ).toHaveAttribute("href", `./${name}/?engine=babylon`);
   }
+});
+
+test("examples index only leaves documented exceptions unported", async ({
+  page,
+}) => {
+  await page.goto(`/examples/`, { timeout: 30_000 });
+
+  const names = await page
+    .locator("tr:not(.engine-aware) td.name")
+    .evaluateAll((cells) =>
+      cells
+        .map((cell) => cell.textContent?.trim())
+        .filter((name): name is string => Boolean(name)),
+    );
+
+  expect(names).toEqual(NON_ENGINE_AWARE_EXAMPLES);
 });
 
 for (const name of ENGINE_AWARE_EXAMPLES) {

@@ -25,6 +25,16 @@
   <body>
     <canvas id="canvas"></canvas>
     <div class="legend">WASD + Mouse to move camera • Go through portal to switch between worlds</div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../js/vendor/three/build/three.module.js",
+          "three/addons/": "../js/vendor/three/examples/jsm/",
+          "@sparkjsdev/spark": "../../dist/spark.module.js",
+          "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm"
+        }
+      }
+    </script>
     <script type="module" src="./main.js"></script>
   </body>
 </html>

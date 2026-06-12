@@ -169,13 +169,15 @@ Exit (achieved, exceeds planned):
 - `envMap` excluded with documented rationale: its rubberduck.glb non-splat Three mesh doesn't bridge to Babylon's native render pass (texture mode hides this behind the Layer composite). Bridging non-splat Three meshes is a separate native-mode feature, out of scope for Phase D.
 - Tier 6 (multi-pass / multi-camera) is implementable on Babylon — the architectural unlock is in place. Phase E can start.
 
-### Phase E — Tier 6 multi-pass + Tier 7 interactive (≈ 6–8 commits, 1 session)
+### Phase E — Tier 6 multi-pass + Tier 7 interactive ✅ ENGINE-AWARE DONE
 
-After Phase D unblocks multi-camera / multi-pass:
-- Add `multipleViewpoints`, `portal`, `newportal`, `splatPortal`, `renderCubeDepth` scenes.
-- Add initial-state-only scenes for the interactive examples.
+Engine-aware example smoke coverage is complete for the Phase E surface:
 
-Exit: matrix has ~36 scenes. AGENTS.md "Backend Visual Parity Goal" lists the 4 non-gatable XR/editor exceptions explicitly.
+- Tier 6 multi-pass / portal examples now load through Three / A-Frame / Babylon: `multiple-viewpoints`, `portal`, `newportal`, `splat-portal`, `render-cube-depth`.
+- Tier 7 interactive examples already load through Three / A-Frame / Babylon: `raycasting`, `interactive-ripples`, `interactive-deform`, `interactive-holes`, `interactivity`, `splat-painter`.
+- The gallery guard in `tests/e2e/multibackend-smoke.spec.ts` asserts that every ordinary example row is `engine-aware`; the only non-engine-aware rows allowed are `editor`, `basic-xr`, `webxr`, `spark-babylon`, and `spark-babylon-native`.
+
+Known caveat: `render-cube-depth`'s initial page load is gated across all three engines, but the checkbox-triggered cube readback (`offline.renderCubeMap()` + `readCubeTargets()`) still needs a focused interaction test before cube-readback parity is claimed.
 
 ### Phase F — Asset vendoring + CI hardening (in flight, 8/9 assets vendored)
 
@@ -251,7 +253,29 @@ The mock exists because A-Frame's npm and CDN builds both bake `super-three@0.17
 
 Total: ~34 commits, 7–8 sessions to reach the AGENTS.md goal with the documented exceptions. The 4 XR/editor examples land as exception list entries in AGENTS.md.
 
-## Current state (2026-06-09, post Phase A)
+## Current state (2026-06-12, post engine-aware rollout)
+
+All ordinary `examples/` rows are engine-aware and visible from `examples/index.html` with Three / A-Frame / Babylon links. The remaining non-engine-aware rows are intentional:
+
+- `editor` — full editor UI; not a high-value pixel parity target versus the runtime/example coverage.
+- `basic-xr`, `webxr` — headset-session semantics are not represented by the headless Playwright smoke lane.
+- `spark-babylon`, `spark-babylon-native` — Babylon host reference pages; engine-switching them would hide the capability they exist to demonstrate.
+
+The current implementation uses `examples/js/spark-engine.js` as the shared host helper. Examples with ordinary render loops use `env.run(tick)`. Multi-pass examples that render manually use `env.runManual(tick)`, which lets Three/A-Frame run their custom pass and lets Babylon present the already-rendered offscreen Three canvas through the texture bridge. Input controls bind to `env.canvas`, not `env.renderer.domElement`, because Babylon's visible event target is the Babylon engine canvas while `env.renderer` is the offscreen Three renderer.
+
+Verification for the final rollout slice:
+
+- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep newportal` — 3/3 pass.
+- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep portal` — 6/6 pass (`portal` and `newportal`).
+- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep "splat-portal"` — 3/3 pass.
+- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep "render-cube-depth"` — 3/3 pass.
+- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep lofi` — 3/3 pass.
+- `pnpm exec playwright test tests/e2e/multibackend-smoke.spec.ts --grep "examples index"` — 2/2 pass, including the exception-set guard.
+- `git diff --check` — clean across the touched example/helper/smoke files.
+
+Historical Phase A checkpoint follows for provenance.
+
+## Historical state (2026-06-09, post Phase A)
 
 **Phase A is complete. 15 scenes in the matrix, all 20 pairwise diffs at 0 / 786432 pixels.** Next is Phase B (animation time-locked scenes).
 
