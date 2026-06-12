@@ -1,3 +1,41 @@
+## Unreleased
+
+Multi-backend rendering: Spark now renders identically across Three.js, A-Frame, and BabylonJS. Every ordinary `examples/` page exposes a `?engine={three,aframe,babylon}` toggle, and a 27-scene visual-parity matrix gates the three backends bit-perfect (0 / 786432 pixels differ) on every shared scene.
+
+### New features
+
+- **A-Frame backend adapter** (`registerSparkAFrame`) — drop Spark into an `<a-scene>` via `<a-entity spark-splat src="...">`. The integration registers a system + component pair so SplatMesh and SparkRenderer participate in A-Frame's scene-graph + render loop natively. See `examples/hello-world/?engine=aframe` for a working demo.
+- **BabylonJS backend adapter** (`SparkBabylonHost`) — two opt-in modes:
+  - `mode: "texture"` (default, MVP) — Spark renders to an internal offscreen Three canvas; Babylon composites the result as a fullscreen `Layer`. Compositing model: splats render behind Babylon content. Bit-perfect against Three at 5% tolerance (actual: 0 / 786432 px diff).
+  - `mode: "native"` — Splats render as a real Babylon `Mesh` inside the scene's render pass via `SparkBabylonMaterial` + `SparkBabylonMesh`. Babylon meshes depth-sort against splats by construction. Bit-perfect against Three on 26 / 27 matrix scenes; the one exclusion is `envMap` (a non-splat Three `rubberduck.glb` that does not bridge to Babylon's native render pass yet — captured next to the `NATIVE_BABYLON_SCENES` set in `test/e2e/snapshot.spec.ts`).
+  - Working demos: `examples/spark-babylon/` (texture) and `examples/spark-babylon-native/` (native).
+- **Engine-aware examples helper** (`examples/js/spark-engine.js`) — single `setupSparkExample({ cameraConfig, clearColor })` factory that returns the same `{ scene, camera, renderer, spark, canvas, add, run }` shape on all three backends. Every ordinary example consumes this helper and stays engine-agnostic. Includes `env.canvas` (the visible top-of-DOM canvas, distinct from the offscreen Three renderer in Babylon mode) for binding `PointerControls` / `SparkControls` / `OrbitControls` / raycast click handlers, and `env.runManual` for examples (`portal`, `splat-portal`, `newportal`) that own their render pass.
+- **Visual-parity test matrix** — `test/e2e/snapshot.spec.ts` renders 27 scenes across `three`, `aframe`, `babylon`, and `babylon-native` host fixtures and compares pairs via `pixelmatch`. Locally-vendored asset set (`test/fixtures/assets/`) removes CDN flakiness from the gate.
+- **Engine-aware smoke spec** — `test/e2e/multibackend-smoke.spec.ts` asserts that every ordinary example loads cleanly on every engine, plus a two-way index guard (every `engine-aware` row in `examples/index.html` exposes A-Frame + Babylon links AND only the documented exceptions — `editor`, `basic-xr`, `webxr`, `spark-babylon`, `spark-babylon-native` — may be unmarked).
+- **Targeted-interaction smoke** for `render-cube-depth` — clicks the Depth checkbox on each engine and asserts the offline `renderCubeMap()` + `readCubeTargets()` pipeline completes with 6 cube faces. Template for future interaction-parity gates.
+- **Native splat shader effects bundle** — `splatShaderEffectsFlare`, `splatShaderEffectsElectronic`, `splatShaderEffectsMeditation`, `splatShaderEffectsWaves` join `splatShaderEffects` in the parity matrix, exercising all 5 branches of the integer-dispatcher inside the same shader bundle (Disintegrate, Flare, Electronic, Meditation, Waves).
+
+### Enhancements
+
+- Every Tier 4 (animation), Tier 5 (shader-effects), Tier 6 (multi-pass / multi-camera), and Tier 7 (interactive) example is now engine-aware. `examples/index.html` exposes per-engine links for all 36 ordinary examples; the 5 documented exceptions (XR / editor / Babylon-host showcases) are intentional and guarded by the smoke spec.
+- New `examples/spark-babylon/` and `examples/spark-babylon-native/` host demos showcasing the texture-bridge and native material backends.
+- Phase F asset vendoring: 8 of 9 parity-matrix assets (`butterfly.spz`, `butterfly-ai.spz`, `cat.spz`, `fly.spz`, `distant-igloo.spz`, `fireplace.spz`, `valley.spz`, `robot-head.spz`, `penguin.spz`, plus `rubberduck.glb`) vendored under `test/fixtures/assets/`, removing CDN dependencies from local + CI runs.
+- Native unit tests for the new backend adapters (`test/ThreeHostSceneAdapter.test.ts`, `test/ThreeSceneQuery.test.ts`, `test/capture.test.ts`, `test/gles.test.ts`, `test/loading.test.ts`).
+
+### Contributor experience
+
+- **`dist/` is no longer tracked in git.** Build output is regenerated from `src/` on every `pnpm run build` and is matched by `.gitignore`. No more phantom dirty working trees, no more merge conflicts on built bundles, no more `git update-index --assume-unchanged` workaround. A new `prepublishOnly` script runs `pnpm run build:wasm && pnpm run build` before `pnpm publish` so the published package always ships fresh artifacts matching the committed `src/`. See README "The `dist/` directory is build output".
+- **Test directory consolidated:** the previous split between `test/` (Node `--test` unit) and `tests/` (Playwright e2e) is gone — everything lives under `test/` now. Unit tests at `test/*.test.ts`, e2e specs at `test/e2e/`, fixtures at `test/fixtures/`, Playwright output at `test/results/` (gitignored). `playwright.config.ts` stays at the repo root.
+- Stale `package-lock.json` removed — `pnpm-lock.yaml` is the authoritative lockfile.
+- 12 leftover `test-results-*/` debug-artifact directories from Phase D's diagnostic-ladder bisection removed; future stray `--output=foo` runs are gitignored via the new `test-results-*/` rule.
+
+### Documentation
+
+- `MULTI-BACKEND-PARITY-PLAN.md` — full phased plan (A through G), per-tier example inventory, exit criteria.
+- `docs/claude-handoff.md` — engine-aware port template, helper API, smoke command, file-read order for the rollout.
+- `AGENTS.md`, `src/backends/README.md` — backend rollout goals + adapter shape for each engine.
+
+
 ## 2.1.0 (Apr 18, 2026)
 
 Bug fixes and adjustments post 2.0.0 release.
@@ -178,11 +216,11 @@ Visual quality improvements and [SOGS](https://blog.playcanvas.com/playcanvas-ad
 
 ## 0.1.3 (June 11, 2025)
 
-Fix types export in npm package.
+Fix types export in published package.
 
 ## 0.1.2 (June 10, 2025)
 
-It removes unnecessary dependencies from npm package.
+It removes unnecessary dependencies from the published package.
 
 ## 0.1.1 (June 10, 2025)
 

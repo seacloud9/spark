@@ -30,6 +30,7 @@ Built by [World Labs](https://www.worldlabs.ai).
 ## Features
 
 - Integrates with THREE.js rendering pipeline to fuse splat and mesh-based objects
+- **Multi-backend rendering** — same Spark scene renders bit-perfect on **Three.js**, **A-Frame**, and **BabylonJS** (see [Multi-backend rendering](#multi-backend-rendering) below)
 - Portable: Works across almost all devices, targeting 98%+ WebGL2 support
 - Renders fast even on low-powered mobile devices
 - Render multiple splat objects together with correct sorting
@@ -39,7 +40,7 @@ Built by [World Labs](https://www.worldlabs.ai).
 - Real-time splat color editing, displacement, and skeletal animation
 - Shader graph system to dynamically create/edit splats on the GPU
 
-Check out all the [examples](https://sparkjs.dev/examples/)
+Check out all the [examples](https://sparkjs.dev/examples/) — every ordinary example exposes a `?engine={three,aframe,babylon}` toggle so you can A/B the same scene across all three backends.
 
 ## Getting Started
 
@@ -104,6 +105,69 @@ Copy the following code into an `index.html` file.
 ```shell
 pnpm add @sparkjsdev/spark
 ```
+
+## Multi-backend rendering
+
+Spark renders **identically across Three.js, A-Frame, and BabylonJS** — a
+27-scene visual-parity matrix gates the three engines bit-perfect
+(0 / 786432 pixels differ) on every shared scene. The same SplatMesh,
+the same shader, the same animation loop; only the host integration
+changes.
+
+### Three.js (native host)
+
+The default. `SparkRenderer` extends `THREE.Mesh` and lives in your
+scene. See the Getting Started snippet above.
+
+### A-Frame
+
+```js
+import { aframe as sparkAframe } from "@sparkjsdev/spark";
+sparkAframe.registerSparkAFrame(AFRAME);
+```
+
+```html
+<a-scene>
+  <a-entity spark-splat="src: https://sparkjs.dev/assets/splats/butterfly.spz"></a-entity>
+</a-scene>
+```
+
+`registerSparkAFrame` registers a `spark` system + `spark-splat` component
+pair so SplatMesh and SparkRenderer participate in A-Frame's scene-graph
++ render loop natively.
+
+> **Note:** A-Frame's npm + CDN distributions both bundle their own
+> `super-three@0.173.x` fork. For Spark and A-Frame to share a single
+> Three.js triple, either build A-Frame from source against your Three
+> (recommended for production) or use the structural mock pattern from
+> `examples/js/spark-engine.js` for cross-namespace test fixtures. See
+> `src/backends/README.md` "A-Frame".
+
+### BabylonJS
+
+Two opt-in modes:
+
+```js
+// Texture-bridge MVP (default): Spark renders to an offscreen Three
+// canvas; Babylon composites it as a fullscreen Layer.
+import { babylon as sparkBabylon } from "@sparkjsdev/spark";
+const host = new sparkBabylon.SparkBabylonHost({
+  babylon: { RawTexture, Layer, Engine, Texture, Color4 },
+  scene: babylonScene,
+  width, height,
+});
+host.add(new SplatMesh({ url: "..." }));
+```
+
+```js
+// Native material: Splats render as a real Babylon Mesh inside the
+// scene's render pass. Babylon meshes depth-sort against splats by
+// construction. Bit-perfect against Three on 26/27 matrix scenes.
+const host = new sparkBabylon.SparkBabylonHost({ /* ... */, mode: "native" });
+```
+
+Working demos: `examples/spark-babylon/` (texture-bridge) and
+`examples/spark-babylon-native/` (native material).
 
 ## Run Examples locally
 
