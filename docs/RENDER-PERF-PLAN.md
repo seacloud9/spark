@@ -68,6 +68,32 @@ This is necessary work, not waste — but it is **extra per-frame work for nativ
 
 `SparkRenderer.lastTraverseTime` and `lastLodRaycastTime` are throttled by `minSortIntervalMs` and `lodRaycastIntervalMs` already — good. The risk is that the LOD walk visits the entire scene graph each tick. For multi-instance SplatMesh groups (e.g., `raycasting/` example with 5 robots sharing one PackedSplats), this might be cheaper than the worst case.
 
+### 2.6 Aframe dual-SparkRenderer race (FIXED in `d713d90`)
+
+The `examples/js/spark-engine.js setupAframeBackend` helper was instantiating TWO `SparkRenderer`s in the same scene: one from `setupThreeBackend` (the base) and one from `registerSparkAFrame`'s `init()`. A stale comment claimed the first was removed; it never was. Every aframe-mode example was paying for two `onBeforeRender` + sort + draw passes per frame.
+
+**Measured impact:** the `helloWorld` parity capture wall time dropped from ~2.0m to ~1.1m after `d713d90` shipped — a clean 2× speedup for the aframe path alone. Surfaced by the `raycasting click delivers hits` interaction smoke (which timed out on aframe pre-fix because Playwright's `mouse.click` waited for the doubled-cost frames to settle).
+
+This is exactly the kind of regression that the Phase 1 instrumentation + Phase 2 perf-test budgets in §4 would catch automatically.
+
+### 2.7 `splat-painter` per-pointermove RgbaArray rebuild
+
+[examples/splat-painter/index.html](../examples/splat-painter/index.html) `updateRgba()` runs a full `RgbaArray.render({ ... })` over the entire splat mesh on EVERY `pointermove` while the brush is in drag mode. The render pipeline allocates a fresh `RgbaArray`, runs the generator over every splat, performs a GPU readback, and disposes the previous array — a complete texture rebuild per move event.
+
+In production this is masked because the browser coalesces `pointermove` events to ~60 Hz, and the rebuild on a small splat scene (e.g., `cat.spz`) is fast enough to fit between coalesced moves. But on a large scene (the example default is `greyscale-bedroom.spz` from CDN — a SOGS scene with millions of splats) each rebuild is multiple seconds, and Playwright's synthesized `mouse.move` events do NOT coalesce, so a drag test that dispatches even 4 explicit moves blocks for ~30+ seconds total.
+
+**Mitigation paths** (priority order):
+
+1. **Coalesce ourselves.** Track `mouseMoveScheduled` flag inside the pointermove handler; if a rebuild is already in flight, skip the new one and apply the latest brush stroke on the next animation frame. Pure JS change, no renderer impact, ships independent of the bigger plan.
+2. **Incremental rgba update.** Only re-render the splats inside the brush radius rather than the entire mesh. Requires the brush dyno to mark which splat indices changed; the existing brush-mode test already iterates indices, so the signal exists.
+3. **Defer to release.** Update brush direction/origin uniforms continuously but ONLY trigger `updateRgba()` on pointerup. Visual feedback during drag would be lost; gated on whether the painted preview is essential UX.
+
+**Surfaced by:** `splat-painter brush paints` interaction smoke needing a 600s test budget (vs 360s for the other Tier 7 smokes). Captured here so the perf plan covers it even before instrumentation lands.
+
+### 2.8 Three-pass scene traversal in `collectThreeSparkScene` (still applies)
+
+See §2.2. The dual-spark fix in 2.6 doesn't change this — `collectThreeSparkScene` still walks the scene three times. With aframe now running 1 SparkRenderer instead of 2, the relative cost of the triple traversal grew (it's now a larger share of the per-frame budget).
+
 ## 3. Known fork-local source modifications
 
 `git diff HEAD -- src/SplatAccumulator.ts src/utils.ts` shows two modified files in the working tree:
