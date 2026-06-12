@@ -51,9 +51,9 @@ No ordinary example is left to port for engine-aware smoke coverage. `tests/e2e/
 - **`spark-babylon`**, **`spark-babylon-native`** — Babylon host showcases by design. The whole point is they demonstrate the Babylon host directly; engine-switching them would defeat the purpose.
 - **`basic-xr`**, **`webxr`**, **`editor`** — Documented non-gatable exceptions. XR requires headset session semantics; editor chrome parity is lower value than the splat/runtime coverage already gated elsewhere.
 
-### Known caveat
+### Closed in `a3db749` (was a known caveat)
 
-`render-cube-depth`'s initial page now loads across Three / A-Frame / Babylon. Its checkbox-triggered `offline.renderCubeMap()` + `readCubeTargets()` path is preserved but was not exercised by the engine-aware smoke test; add a focused interaction test before claiming cube-readback parity.
+`render-cube-depth`'s checkbox-triggered `offline.renderCubeMap()` + `readCubeTargets()` path is now gated by a per-engine interaction smoke. The Depth checkbox is rewired to an explicit `addEventListener` and `toggleDepth()` writes `data-cube-depth-ready`, `data-depth-ready`, and `data-depth-faces` body dataset flags; the new test clicks through one full cycle and asserts `data-depth-ready="depth"` + `data-depth-faces="6"` on each of Three / A-Frame / Babylon. Verified 3/3 pass in 6.4m wall time. This is currently the only example in the matrix that gates anything beyond initial page load — its shape is the template for future targeted-interaction smokes (raycasting hit, splat-painter brush, interactive-deform drag, etc.).
 
 ## Engine-aware port template
 
