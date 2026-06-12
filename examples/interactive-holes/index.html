@@ -37,39 +37,34 @@
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
         "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
         "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
       }
     }
   </script>
   <script type="module">
     import * as THREE from "three";
-    import { SplatMesh, SparkRenderer, dyno, SparkControls, SplatEdit, SplatEditSdf, SplatEditSdfType, SplatEditRgbaBlendMode } from "@sparkjsdev/spark";
+    import { SplatMesh, dyno, SparkControls, SplatEdit, SplatEditSdf, SplatEditSdfType, SplatEditRgbaBlendMode } from "@sparkjsdev/spark";
     import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
     import { GUI } from "lil-gui";
     import { getAssetFileURL } from "../js/get-asset-url.js";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
-    // Scene
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 50);
-    camera.position.set(0, -0.3, -3);
-    camera.lookAt(0, 0, 1);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-    
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
-
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+    const env = await setupSparkExample({
+      cameraConfig: {
+        fov: 50,
+        near: 0.1,
+        far: 50,
+        position: [0, -0.3, -3],
+        lookAt: [0, 0, 1],
+      },
     });
+    const scene = env.scene;
+    const camera = env.camera;
 
     // Controls (mouse only, WASD disabled)
-    const controls = new SparkControls({ canvas: renderer.domElement });
-    controls.fpsMovement.enable = false; // Disable WASD movement
+    const controls = new SparkControls({ canvas: env.canvas });
+    controls.fpsMovement.enable = false;
 
     // Lights
 
@@ -226,7 +221,7 @@
     splatMesh.scale.set(1,1, 1);
     splatMesh.worldModifier = createInteractiveHolesDynoshader();
     splatMesh.updateGenerator();
-    scene.add(splatMesh);
+    env.add(splatMesh);
 
     // Persistent interactive holes edit (permanently removes splats in clicked regions)
     const interactiveHolesEdit = new SplatEdit({
@@ -369,8 +364,8 @@
     // Increase threshold to detect splats more reliably, especially after modifications
     raycaster.params.Points = { threshold: 0.5 };
     
-    renderer.domElement.addEventListener("pointerdown", (event) => {
-      const rect = renderer.domElement.getBoundingClientRect();
+    env.canvas.addEventListener("pointerdown", (event) => {
+      const rect = env.canvas.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((event.clientX - rect.left) / rect.width) * 2 - 1,
         -((event.clientY - rect.top) / rect.height) * 2 + 1,
@@ -418,14 +413,11 @@
     });
 
     // Animation loop
-    renderer.setAnimationLoop((timeMs) => {
+    env.run((timeMs) => {
       const time = timeMs * 0.001;
-      // Update camera controls
       controls.update(camera);
       animationTime.value = time;
-      // Always update; impulses are persistent and unioned in shader
       splatMesh.updateVersion();
-      renderer.render(scene, camera);
     });
 
 
