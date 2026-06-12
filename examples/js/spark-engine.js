@@ -136,6 +136,17 @@ async function setupAframeBackend(opts) {
   // src/backends/README.md "A-Frame" for the recipe.
   const base = await setupThreeBackend(opts);
 
+  // setupThreeBackend already mounted a SparkRenderer in the scene.
+  // registerSparkAFrame's spark-system init() will mount a SECOND one.
+  // Remove the first so the scene only carries one SparkRenderer —
+  // otherwise both run per-frame onBeforeRender / sort / draw and
+  // double the GPU work (measurable on raycasting / interactive scenes
+  // where the doubled cost slows Playwright's mouse.click past its
+  // settle timeout).
+  if (base.spark && base.spark.parent) {
+    base.spark.parent.remove(base.spark);
+  }
+
   const systems = {};
   const sceneEl = {
     renderer: base.renderer,
@@ -161,9 +172,8 @@ async function setupAframeBackend(opts) {
     sparkRendererOptions: { ...(opts.sparkOptions ?? {}) },
   });
 
-  // The Spark system's init() removed the SparkRenderer the Three
-  // backend already attached; replace base.spark with the one the
-  // integration mounted so the example sees a consistent reference.
+  // Hand the example the SparkRenderer the aframe system mounted, so
+  // env.spark points at the live one (the original was removed above).
   base.spark = systems.spark?.spark ?? base.spark;
   base.engine = "aframe";
   return base;

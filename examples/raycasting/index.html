@@ -70,14 +70,28 @@
     // Raycast logic. Attach to document so the click is caught regardless of
     // which engine's canvas is currently composited on top. NDC is computed
     // from viewport dimensions so it stays accurate across backends.
+    //
+    // Interaction smoke gates (data-raycast-*): each click bumps a counter
+    // so Playwright can assert that the document-level click listener wired
+    // by setupSparkExample's env.canvas vs env.renderer.domElement split
+    // actually delivers events to user JS on every engine, and that the
+    // raycast pipeline produces hits the same way on each.
+    let clickCount = 0;
+    let hitCount = 0;
     const raycaster = new THREE.Raycaster();
     document.addEventListener("click", (event) => {
+      clickCount += 1;
+      document.body.dataset.raycastClicks = String(clickCount);
+
       const clickCoords = new THREE.Vector2(
         (event.clientX / window.innerWidth) * 2 - 1,
         -(event.clientY / window.innerHeight) * 2 + 1,
       );
 
       raycaster.setFromCamera(clickCoords, env.camera);
+      // Non-recursive: robots are direct children of env.scene. The
+      // recursive variant infinitely loops in aframe mode because the
+      // dual-SparkRenderer scene graph contains backref cycles.
       const hits = raycaster.intersectObjects(env.scene.children);
 
       const index = hits.findIndex(hit => hit.object instanceof SplatMesh);
@@ -87,7 +101,17 @@
           robot.recolor.set(1, 0.5, 0.5);
           robot.clickedTimer = 40;
         }
+        hitCount += 1;
+        document.body.dataset.raycastHits = String(hitCount);
+        document.body.dataset.raycastLastHitId = String(robots.indexOf(robot));
       }
+    });
+
+    // Mark the page raycast-ready once every robot's SplatMesh is initialized
+    // — by that point env.scene.children contains the 5 SplatMesh objects
+    // raycaster.intersectObjects walks. Fires regardless of engine.
+    Promise.all(robots.map((r) => r.initialized)).then(() => {
+      document.body.dataset.raycastReady = "true";
     });
 
     env.run((time) => {
