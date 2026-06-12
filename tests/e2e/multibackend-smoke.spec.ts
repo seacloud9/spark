@@ -36,6 +36,7 @@ const ENGINE_AWARE_EXAMPLES = [
   "interactive-holes",
   "interactivity",
   "splat-painter",
+  "viewer",
 ];
 
 test("examples index shows engine-aware bullet for every ported example", async ({
