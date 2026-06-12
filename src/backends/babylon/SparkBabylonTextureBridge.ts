@@ -126,8 +126,14 @@ export class SparkBabylonTextureBridge {
    * guard short-circuits the per-splat decode.
    */
   syncOnce(): void {
+    const readbackStart = performance.now();
     this.syncOrdering();
     this.syncExtSplats();
+    // Surface the per-frame GPU→CPU readback cost on SparkRenderer so
+    // `perfMetrics.lastBabylonReadbackMs` reflects what texture-mode is paying
+    // (native mode never enters this path; the field stays at 0).
+    this.sparkRenderer.lastBabylonReadbackMs =
+      performance.now() - readbackStart;
   }
 
   /**

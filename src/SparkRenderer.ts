@@ -332,6 +332,33 @@ export interface SparkRendererOptions {
   depthWrite?: boolean;
 }
 
+/**
+ * Snapshot of the last-frame timings surfaced by `SparkRenderer.perfMetrics`.
+ *
+ * Every field is the duration of the most recent invocation of the named work
+ * item in milliseconds. `0` means "not measured this session yet" (or
+ * throttled-out — sort, raycast, and the Babylon readback only run when their
+ * own gates fire). Fields are written by their producer; reading them costs
+ * nothing.
+ *
+ * See `docs/RENDER-PERF-PLAN.md` §4 Phase 1 for the rationale + budgets these
+ * metrics are intended to feed.
+ */
+export interface SparkPerfMetrics {
+  /** Total wall time between `onBeforeRender` calls — best single-number proxy for frame budget. */
+  lastFrameMs: number;
+  /** Duration of the most recent `driveSort` body (worker round-trip + ordering upload). */
+  lastSortMs: number;
+  /** Duration of the most recent `SplatAccumulator.generate()` invocation in `updateInternal`. */
+  lastAccumulateMs: number;
+  /** Duration of the most recent `traverseLodTrees` call inside `driveLod`. Already kept upstream as `lastTraverseTime`. */
+  lastTraverseMs: number;
+  /** Duration of the most recent LOD-raycast `traverseLodTrees` call. */
+  lastLodRaycastMs: number;
+  /** Duration of the most recent Babylon texture-bridge readback (ordering + extSplats GPU→CPU copy). `0` when host is not in Babylon texture mode. */
+  lastBabylonReadbackMs: number;
+}
+
 export class SparkRenderer extends THREE.Mesh {
   readonly renderer: THREE.WebGLRenderer;
   readonly material: THREE.ShaderMaterial;
@@ -450,6 +477,16 @@ export class SparkRenderer extends THREE.Mesh {
   }[] = [];
   lastTraverseTime = 0;
   lastPixelLimit?: number;
+
+  // Per-frame perf timings — see `SparkPerfMetrics` getter `perfMetrics` for the public surface.
+  // `lastSortTime` / `lastLodRaycastTime` (above) are TIMESTAMPS used for throttle gates;
+  // the `Ms` fields below are DURATIONS in milliseconds suitable for budgets and assertions.
+  lastSortMs = 0;
+  lastAccumulateMs = 0;
+  lastLodRaycastMs = 0;
+  lastFrameMs = 0;
+  lastBabylonReadbackMs = 0;
+  private lastFrameStartMs = 0;
 
   pager?: SplatPager;
   pagerId = 0;
@@ -745,6 +782,14 @@ export class SparkRenderer extends THREE.Mesh {
     const isNewFrame = frame !== spark.lastFrame;
     spark.lastFrame = frame;
 
+    if (isNewFrame) {
+      const frameNow = performance.now();
+      if (spark.lastFrameStartMs > 0) {
+        spark.lastFrameMs = frameNow - spark.lastFrameStartMs;
+      }
+      spark.lastFrameStartMs = frameNow;
+    }
+
     if (spark.target) {
       spark.renderSize.set(spark.target.width, spark.target.height);
     } else {
@@ -843,6 +888,22 @@ export class SparkRenderer extends THREE.Mesh {
     this.setDirty();
   }
 
+  /**
+   * Snapshot of the most recent per-frame timings. See `SparkPerfMetrics` for
+   * field semantics. Reading is allocation-free; producers write the underlying
+   * fields directly so there is no overhead when nothing reads `perfMetrics`.
+   */
+  get perfMetrics(): SparkPerfMetrics {
+    return {
+      lastFrameMs: this.lastFrameMs,
+      lastSortMs: this.lastSortMs,
+      lastAccumulateMs: this.lastAccumulateMs,
+      lastTraverseMs: this.lastTraverseTime,
+      lastLodRaycastMs: this.lastLodRaycastMs,
+      lastBabylonReadbackMs: this.lastBabylonReadbackMs,
+    };
+  }
+
   async update({
     scene,
     camera,
@@ -939,12 +1000,14 @@ export class SparkRenderer extends THREE.Mesh {
       // Restore unused accumulator to the free list
       this.accumulators.push(next);
     } else {
+      const accumStart = performance.now();
       generate();
 
       if (this.flushAfterGenerate) {
         const gl = renderer.getContext() as WebGL2RenderingContext;
         gl.flush();
       }
+      this.lastAccumulateMs = performance.now() - accumStart;
 
       if (this.display.mappingVersion === next.mappingVersion) {
         // Same splat mapping so let's display it immediately and
@@ -994,6 +1057,7 @@ export class SparkRenderer extends THREE.Mesh {
     this.sorting = true;
     this.sortDirty = false;
     this.lastSortTime = now;
+    const sortStart = now;
 
     if (this.readPause > 0) {
       await new Promise((resolve) => setTimeout(resolve, this.readPause));
@@ -1097,7 +1161,8 @@ export class SparkRenderer extends THREE.Mesh {
       }
     }
 
-    // console.log(`Sorted (${this.minSortIntervalMs}) ${numSplats} splats in ${(performance.now() - now).toFixed(0)} ms`);
+    this.lastSortMs = performance.now() - sortStart;
+    // console.log(`Sorted (${this.minSortIntervalMs}) ${numSplats} splats in ${this.lastSortMs.toFixed(0)} ms`);
 
     if (this.current.mappingVersion === current.mappingVersion) {
       if (this.current.mappingVersion !== this.display.mappingVersion) {
@@ -1528,6 +1593,7 @@ export class SparkRenderer extends THREE.Mesh {
         >;
       };
       const raycastTraverseTime = performance.now() - traverseStart;
+      this.lastLodRaycastMs = raycastTraverseTime;
 
       const { keyIndices } = result;
       const totalRaycastSplats = Object.values(keyIndices).reduce(

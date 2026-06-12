@@ -122,22 +122,29 @@ git checkout main && git merge --ff-only perf/upstream-cherry-pick
 
 Skip the cherry-pick of `2e7d9e0` + `63c6d6a` unless we want the Rust API rename (changes the LOD-builder semantics; not a perf change).
 
-### Phase 1 — bottleneck instrumentation (≤ 2 hours)
+### Phase 1 — bottleneck instrumentation — ✅ SHIPPED
 
-Surface the existing timers through a single `SparkRenderer.perfMetrics` getter so consumers (tests + dev examples) can read them without monkey-patching:
+Surfaced the existing + new timers through a single `SparkRenderer.perfMetrics` getter so consumers (tests + dev examples) can read them without monkey-patching:
 
 ```ts
 interface SparkPerfMetrics {
-  lastSortMs: number;      // SparkRenderer.ts ~982 → ~1100 window
-  lastTraverseMs: number;  // already kept as this.lastTraverseTime
-  lastLodRaycastMs: number; // already kept as this.lastLodRaycastTime
-  lastAccumulateMs: number; // new — wrap SplatAccumulator.update()
-  lastReadbackMs: number;  // new — Babylon texture-bridge readback
-  lastFrameMs: number;     // new — total per-frame wall time
+  lastFrameMs: number;            // delta between onBeforeRender frames
+  lastSortMs: number;             // driveSort body (worker round-trip + ordering upload)
+  lastAccumulateMs: number;       // SplatAccumulator generate() in updateInternal
+  lastTraverseMs: number;         // existing this.lastTraverseTime (LOD traverse)
+  lastLodRaycastMs: number;       // raycast traverseLodTrees call in driveLod
+  lastBabylonReadbackMs: number;  // SparkBabylonTextureBridge syncOrdering+syncExtSplats (0 in native mode)
 }
 ```
 
-All measurements come from `performance.now()` and reset every frame. Zero overhead when not read.
+All measurements come from `performance.now()`. Producers write the underlying instance fields directly; reading `perfMetrics` allocates one plain object. Zero overhead when not read. Throttled producers (sort, raycast, Babylon readback) leave `0` until they fire, then keep the last-observed value — consumers can detect "not measured yet" by checking `=== 0`.
+
+**Verified 2026-06-12:** typecheck clean, biome clean, axes scene 8/8 backends still 0/786432 px diff against the four-way parity matrix (`three`, `aframe`, `babylon-texture`, `babylon-native`). No behavioral change in the render path — measurement points are wraps, not gates.
+
+**Files touched:**
+- [src/SparkRenderer.ts](../src/SparkRenderer.ts): `SparkPerfMetrics` interface export, six new instance fields + `lastFrameStartMs` private, `perfMetrics` getter, four new timing wraps (`onBeforeRender` frame delta, `updateInternal` accumulate, `driveSort` body, `driveLod` raycast — the raycast site already computed `raycastTraverseTime` but discarded it; now mirrored onto `lastLodRaycastMs`).
+- [src/backends/babylon/SparkBabylonTextureBridge.ts](../src/backends/babylon/SparkBabylonTextureBridge.ts): wrapped `syncOnce()` body with `performance.now()` delta written to `sparkRenderer.lastBabylonReadbackMs`.
+- [src/index.ts](../src/index.ts): re-export `type SparkPerfMetrics` alongside `SparkRenderer` / `SparkRendererOptions`.
 
 ### Phase 2 — perf-test infrastructure (≤ 4 hours)
 

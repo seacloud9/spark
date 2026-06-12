@@ -2,6 +2,47 @@
 
 Date: 2026-06-11 (post engine-aware rollout push).
 Codex continuation update: 2026-06-12.
+Claude perf Phase 1 update: 2026-06-12.
+
+## Status as of this handoff (2026-06-12 afternoon)
+
+**Multi-backend parity:** unchanged from this morning's Codex continuation — 27 scenes, bit-perfect 0/786432 across Three / A-Frame / Babylon-texture / Babylon-native (envMap remains native-excluded; texture mode bit-perfect there). All 36/41 ordinary examples engine-aware; 5 documented exceptions guarded by smoke index.
+
+**Render perf:** `docs/RENDER-PERF-PLAN.md` Phase 0/0.5 already done (upstream `sort32 fast` + `dataReady false` cherry-picked as `b4804c8` + `2f51875`; dual-spark fix shipped in `d713d90`). **Phase 1 instrumentation now landed** — see below.
+
+## Phase 1 perf instrumentation (claude session 2026-06-12)
+
+Added `SparkRenderer.perfMetrics` getter returning a `SparkPerfMetrics` snapshot of last-frame timings. Six fields:
+- `lastFrameMs` — delta between `onBeforeRender` invocations (per-frame wall budget proxy).
+- `lastSortMs` — `driveSort` body (worker round-trip + ordering upload). `0` until first sort fires.
+- `lastAccumulateMs` — `SplatAccumulator.generate()` inside `updateInternal`.
+- `lastTraverseMs` — existing `this.lastTraverseTime` (LOD traverse).
+- `lastLodRaycastMs` — raycast `traverseLodTrees` in `driveLod` (was computed but discarded — now surfaced).
+- `lastBabylonReadbackMs` — `SparkBabylonTextureBridge.syncOnce()` total. `0` in native mode.
+
+Verified: typecheck clean, biome clean, axes scene 8/8 still bit-perfect on all four backends. No runtime overhead — producers write instance fields directly; the getter just packs them into a plain object.
+
+Exports: `SparkPerfMetrics` re-exported from `src/index.ts` alongside `SparkRenderer` / `SparkRendererOptions`.
+
+### What's next — Phase 2 perf-test infrastructure (≤ 4 hours, spec'd in §4 of `docs/RENDER-PERF-PLAN.md`)
+
+Codex pickup hook:
+
+1. **`test/perf/render-fps.spec.ts`** — Playwright loads `test/fixtures/snapshot-{three,aframe,babylon}.html?scene=<scene>`, drives `requestAnimationFrame` for 600 frames, samples `spark.perfMetrics` each frame, records `{lastFrameMs, lastSortMs, lastAccumulateMs, lastTraverseMs, lastLodRaycastMs, lastBabylonReadbackMs}` distributions. Per-scene per-backend p50 / p95 / p99 written to JSON.
+   - The Three/A-Frame/Babylon fixtures already expose `spark` on `window` for the snapshot path — confirm via `await page.evaluate(() => window.spark.perfMetrics)`.
+   - Hot scenes for the first cut: `helloWorld` (177K splats baseline), `glsl` (dyno raw-shader path), `sogs` (cold-cache SOGS load + many splats), `splatShaderEffects` (5-variant effectType branch coverage).
+2. **Budget assertions** — first run is baseline-write only (no assertions). Second run gates against the recorded baseline within ±15% per-metric. Codex's call whether to start with assertions OFF and warn-only, or ON with a generous initial band.
+3. **`test/perf/regression-baseline.json`** — committed alongside the spec; failure messages should print the JSON line that needs updating.
+4. **`pnpm run test:perf`** — new script wrapping `playwright test test/perf/`. Separate from `test:e2e` because perf runs want their own retry/serialization policy.
+
+Phase 1 fields cover everything Phase 2 needs. No further SparkRenderer surface changes expected before Phase 3 optimizations.
+
+### Pickup notes for Phase 2
+
+- `spark` is the SparkRenderer instance; the existing fixtures put it on `window.spark` so `page.evaluate(() => window.spark.perfMetrics)` works without any new plumbing.
+- For Babylon **native** mode, `lastBabylonReadbackMs` should be `0` always — verify in the spec as a sanity check (native skips the readback path).
+- Phase 1 fields START at `0` until their producer fires. Throttled producers (sort gated by `minSortIntervalMs`, raycast gated by `lodRaycastIntervalMs`) may not fire every frame — the perf spec should record nonzero samples only or aggregate over the full 600-frame window.
+- The `axes` smoke is the fastest sanity check (< 60s wall time for 8 sub-tests including parity). Use it as the smoke-cycle scene during Phase 2 spec development before running the heavy hot-scene set.
 
 ## Headline numbers
 

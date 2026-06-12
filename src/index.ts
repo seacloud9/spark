@@ -1,5 +1,6 @@
 export {
   SparkRenderer,
+  type SparkPerfMetrics,
   type SparkRendererOptions,
 } from "./SparkRenderer";
 export { SplatAccumulator, type GeneratorMapping } from "./SplatAccumulator";
