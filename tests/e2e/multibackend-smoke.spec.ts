@@ -90,6 +90,52 @@ test("examples index only leaves documented exceptions unported", async ({
   expect(names).toEqual(NON_ENGINE_AWARE_EXAMPLES);
 });
 
+for (const engine of ENGINES) {
+  test(`render-cube-depth depth toggle completes on engine=${engine}`, async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+
+    const errors: string[] = [];
+    page.on("pageerror", (err) => {
+      errors.push(err.message);
+    });
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        errors.push(`console.error: ${msg.text()}`);
+      }
+    });
+
+    const qs = engine === "three" ? "" : `?engine=${engine}`;
+    await page.goto(`/examples/render-cube-depth/${qs}`, {
+      timeout: 120_000,
+    });
+
+    await expect(page.locator("#spark-engine-switcher")).toBeVisible({
+      timeout: 120_000,
+    });
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-cube-depth-ready",
+      "true",
+      { timeout: 120_000 },
+    );
+
+    await page.locator("label", { hasText: "Depth" }).click();
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-depth-ready",
+      "depth",
+      { timeout: 120_000 },
+    );
+    await expect(page.locator("body")).toHaveAttribute("data-depth-faces", "6");
+
+    if (errors.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`[render-cube-depth ${engine}] errors:`, errors);
+    }
+    expect(errors).toEqual([]);
+  });
+}
+
 for (const name of ENGINE_AWARE_EXAMPLES) {
   for (const engine of ENGINES) {
     test(`${name} loads on engine=${engine}`, async ({ page }) => {

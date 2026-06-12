@@ -28,7 +28,7 @@
 </head>
 
 <body>
-  <label><input type="checkbox" onchange="toggleDepth()" autocomplete="off"> Depth</label>
+  <label><input id="depth-toggle" type="checkbox" autocomplete="off"> Depth</label>
   <script type="importmap">
     {
       "imports": {
@@ -138,6 +138,8 @@
     });
 
     window.toggleDepth = async () => {
+      document.body.dataset.depthReady = "pending";
+      document.body.dataset.depthFaces = "";
       if (!scene.overrideMaterial) {
         scene.overrideMaterial = depthMaterial;
         background.worldModifiers = [encodeDistance];
@@ -162,6 +164,8 @@
       });
       const cubePixels = await offline.readCubeTargets();
       console.log("cubePixels", cubePixels);
+      document.body.dataset.depthReady = scene.overrideMaterial ? "depth" : "color";
+      document.body.dataset.depthFaces = String(cubePixels.length);
 
       function unpackDepthFromRGB(data, i, camera) {
         const base = i * 4;
@@ -186,6 +190,10 @@
         console.log("faceDistances", faceDistances);
       }
     };
+    document.getElementById("depth-toggle")?.addEventListener("change", () => {
+      window.toggleDepth();
+    });
+    document.body.dataset.cubeDepthReady = "true";
 
     const controls = new SparkControls({ canvas: env.canvas });
 
