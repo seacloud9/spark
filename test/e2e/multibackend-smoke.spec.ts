@@ -376,6 +376,99 @@ for (const engine of ENGINES) {
   });
 }
 
+for (const engine of ENGINES) {
+  test(`splat-painter brush paints on engine=${engine}`, async ({
+    page,
+  }) => {
+    // 600s — splat-painter loads greyscale-bedroom.spz from CDN (not
+    // vendored under test/fixtures/assets/ — see VENDORED_ASSETS in
+    // test/fixtures/scenes.mjs) plus the brush-mode pointerdown does
+    // a full RgbaArray.render() rebuild, both expensive. The simpler
+    // smokes (raycasting, ripples, deform) fit comfortably in 360s.
+    test.setTimeout(600_000);
+
+    const errors: string[] = [];
+    page.on("pageerror", (err) => {
+      errors.push(err.message);
+    });
+    page.on("console", (msg) => {
+      if (msg.type() !== "error") return;
+      const text = msg.text();
+      if (text.includes("ws://127.0.0.1:4173")) return;
+      errors.push(`console.error: ${text}`);
+    });
+
+    const qs = engine === "three" ? "" : `?engine=${engine}`;
+    await page.goto(`/examples/splat-painter/${qs}`, { timeout: 120_000 });
+
+    await expect(page.locator("#spark-engine-switcher")).toBeVisible({
+      timeout: 120_000,
+    });
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-painter-ready",
+      "true",
+      { timeout: 120_000 },
+    );
+
+    // Press '1' to enter brush mode. window-level keydown listener; focus
+    // the body first so the synthetic key reaches it on every engine.
+    await page.locator("body").focus();
+    await page.keyboard.press("1");
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-painter-mode",
+      "brush",
+      { timeout: 5_000 },
+    );
+
+    // Single down → up with no intermediate drag. The brush in
+    // splat-painter triggers a FULL SplatMesh rgba rebuild on every
+    // pointermove while dragging — fine in production where the browser
+    // coalesces moves, but Playwright's synthetic moves block waiting
+    // for each GPU readback to complete. Keeping the gesture to one
+    // down + one up tests the keyboard-mode-switch + pointer pipeline
+    // + brush-dispatch (pointerdown calls updateRgba() once) without
+    // forcing the readback path to settle multiple times in a row.
+    const viewport = page.viewportSize();
+    if (!viewport) throw new Error("no viewport");
+    const cx = Math.floor(viewport.width / 2);
+    const cy = Math.floor(viewport.height / 2);
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.waitForTimeout(150);
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-painter-downs",
+      "1",
+      { timeout: 5_000 },
+    );
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-painter-ups",
+      "1",
+      { timeout: 5_000 },
+    );
+    const moves = await page
+      .locator("body")
+      .getAttribute("data-painter-moves");
+    const rgbaUpdates = await page
+      .locator("body")
+      .getAttribute("data-painter-rgba-updates");
+    // eslint-disable-next-line no-console
+    console.log(
+      `[splat-painter ${engine}] moves=${moves ?? "0"} rgbaUpdates=${rgbaUpdates ?? "0"}`,
+    );
+    // rgba-updates fires once on pointerdown in brush mode.
+    expect(Number(rgbaUpdates ?? 0)).toBeGreaterThanOrEqual(1);
+
+    if (errors.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`[splat-painter ${engine}] errors:`, errors);
+    }
+    expect(errors).toEqual([]);
+  });
+}
+
 for (const name of ENGINE_AWARE_EXAMPLES) {
   for (const engine of ENGINES) {
     test(`${name} loads on engine=${engine}`, async ({ page }) => {

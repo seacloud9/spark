@@ -245,6 +245,16 @@
     }
 
     await loadSplatFromFile(await getAssetFileURL(assetID));
+    // Interaction smoke gate: lets Playwright wait until the splat mesh
+    // is loaded and the worldModifier is installed. Same dataset-flag
+    // template as raycasting / interactive-ripples / interactive-deform.
+    document.body.dataset.painterReady = "true";
+
+    // Counters surface the brush-paint pipeline for the smoke test.
+    let downCount = 0;
+    let moveCount = 0;
+    let upCount = 0;
+    let rgbaUpdateCount = 0;
 
     const raycaster = new THREE.Raycaster();
     let isDragging = false;
@@ -269,6 +279,8 @@
     }
 
     function updateRgba() {
+      rgbaUpdateCount += 1;
+      document.body.dataset.painterRgbaUpdates = String(rgbaUpdateCount);
       if (currentSplatMesh) {
         const newRgba = new RgbaArray();
         newRgba.render({
@@ -288,6 +300,9 @@
     }
 
     env.canvas.addEventListener('pointermove', (event) => {
+        moveCount += 1;
+        document.body.dataset.painterMoves = String(moveCount);
+
         const rect = env.canvas.getBoundingClientRect();
         const clickCoords = new THREE.Vector2(
           ((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -307,16 +322,20 @@
           updateRgba();
         }
       });
-    
+
     env.canvas.addEventListener('pointerdown', (event) => {
+      downCount += 1;
+      document.body.dataset.painterDowns = String(downCount);
       isDragging = true;
       updateRgba();
     });
-    
+
     env.canvas.addEventListener('pointerup', (event) => {
+      upCount += 1;
+      document.body.dataset.painterUps = String(upCount);
       isDragging = false;
     });
-    
+
     env.canvas.addEventListener('pointerleave', (event) => {
       isDragging = false;
     });
@@ -530,6 +549,7 @@
         PARAMETERS.undoEnabled.value = false;
         PARAMETERS.controlsEnabled = false;
         controls.enabled = false;
+        document.body.dataset.painterMode = "brush";
         showModeOverlay('Paint Mode');
       } else if (event.key === '2') {
         // Eraser mode
