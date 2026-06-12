@@ -22,6 +22,13 @@ Multi-backend rendering: Spark now renders identically across Three.js, A-Frame,
 - Phase F asset vendoring: 8 of 9 parity-matrix assets (`butterfly.spz`, `butterfly-ai.spz`, `cat.spz`, `fly.spz`, `distant-igloo.spz`, `fireplace.spz`, `valley.spz`, `robot-head.spz`, `penguin.spz`, plus `rubberduck.glb`) vendored under `test/fixtures/assets/`, removing CDN dependencies from local + CI runs.
 - Native unit tests for the new backend adapters (`test/ThreeHostSceneAdapter.test.ts`, `test/ThreeSceneQuery.test.ts`, `test/capture.test.ts`, `test/gles.test.ts`, `test/loading.test.ts`).
 
+### Performance
+
+- **`make sort32 fast (#327)`** — Rust-side branchless WASM hot-loop optimization in `rust/spark-rs/src/sort.rs`. Cherry-picked from `sparkjsdev/spark` upstream (commit `6d24120`, author Ali Milhim, co-authored by Andreas Sundquist). Speeds up the 32-bit sort path that runs every accumulator update.
+- **`Set dataReady false for textures arrays in SplatPager (#358)`** — SplatPager state-management fix cherry-picked from upstream (commit `78bc65e`, author Noeri Huisman). Reduces unnecessary GPU uploads during paged-splat state transitions.
+- **Aframe dual-SparkRenderer fix** in `examples/js/spark-engine.js` — `setupAframeBackend` was racing TWO SparkRenderers per frame (one from `setupThreeBackend`, one from `registerSparkAFrame`), silently doubling GPU work for every aframe-mode example. Now removes the first explicitly. Surfaced by the new `raycasting click delivers hits` interaction smoke, which timed out on aframe before the fix.
+- **`docs/RENDER-PERF-PLAN.md`** — phased plan covering instrumentation (`SparkRenderer.perfMetrics` getter), perf test infrastructure (`test/perf/` FPS budget + memory-growth + regression baseline), and targeted optimization candidates (Babylon texture-bridge shared GL context, three-pass scene traversal fold-into-one, scratch buffer reuse). Upstream remote configured fetch-only (`upstream push = no_push`) for divergence comparison without ever pushing.
+
 ### Contributor experience
 
 - **`dist/` is no longer tracked in git.** Build output is regenerated from `src/` on every `pnpm run build` and is matched by `.gitignore`. No more phantom dirty working trees, no more merge conflicts on built bundles, no more `git update-index --assume-unchanged` workaround. A new `prepublishOnly` script runs `pnpm run build:wasm && pnpm run build` before `pnpm publish` so the published package always ships fresh artifacts matching the committed `src/`. See README "The `dist/` directory is build output".

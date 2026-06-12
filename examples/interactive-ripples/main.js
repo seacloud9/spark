@@ -85,10 +85,24 @@ raycaster.params.Points = { threshold: 1.0 };
 
 let timeCounter = 0;
 
+// Interaction smoke gates: clicks/hits counters + last hitpoint expose
+// the pointer → raycast → uniform-update pipeline to Playwright. The
+// hard gate the smoke test enforces is data-ripple-clicks (delivery),
+// matching the raycasting / render-cube-depth template.
+let clickCount = 0;
+let hitCount = 0;
+
+valley.initialized.then(() => {
+  document.body.dataset.rippleReady = "true";
+});
+
 // Click events bind to env.canvas (the visible top-of-DOM canvas) so the
 // raycast works regardless of whether we're on Three's renderer canvas or
 // Babylon's engine canvas.
 env.canvas.addEventListener("pointerdown", (event) => {
+  clickCount += 1;
+  document.body.dataset.rippleClicks = String(clickCount);
+
   const rect = env.canvas.getBoundingClientRect();
   const ndc = new THREE.Vector2(
     ((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -105,6 +119,10 @@ env.canvas.addEventListener("pointerdown", (event) => {
   const localPoint = valley.worldToLocal(hit.point.clone());
   hitpointUniform.value.copy(localPoint);
   timeCounter = 0;
+
+  hitCount += 1;
+  document.body.dataset.rippleHits = String(hitCount);
+  document.body.dataset.rippleLastHitpoint = `${localPoint.x.toFixed(3)},${localPoint.y.toFixed(3)},${localPoint.z.toFixed(3)}`;
 });
 
 env.run(() => {

@@ -221,6 +221,77 @@ for (const engine of ENGINES) {
   });
 }
 
+for (const engine of ENGINES) {
+  test(`interactive-ripples click delivers ripples on engine=${engine}`, async ({
+    page,
+  }) => {
+    test.setTimeout(360_000);
+
+    const errors: string[] = [];
+    page.on("pageerror", (err) => {
+      errors.push(err.message);
+    });
+    page.on("console", (msg) => {
+      if (msg.type() !== "error") return;
+      const text = msg.text();
+      if (text.includes("ws://127.0.0.1:4173")) return;
+      errors.push(`console.error: ${text}`);
+    });
+
+    const qs = engine === "three" ? "" : `?engine=${engine}`;
+    await page.goto(`/examples/interactive-ripples/${qs}`, {
+      timeout: 120_000,
+    });
+
+    await expect(page.locator("#spark-engine-switcher")).toBeVisible({
+      timeout: 120_000,
+    });
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-ripple-ready",
+      "true",
+      { timeout: 120_000 },
+    );
+
+    // valley.spz fills most of the viewport at the example's default
+    // camera. Three clicks around center are enough to verify pointer →
+    // raycast → uniform-update on every engine.
+    const viewport = page.viewportSize();
+    if (!viewport) throw new Error("no viewport");
+    const cx = Math.floor(viewport.width / 2);
+    const cy = Math.floor(viewport.height / 2);
+    for (const [dx, dy] of [
+      [0, 0],
+      [-80, 40],
+      [80, -40],
+    ]) {
+      await page.mouse.click(cx + dx, cy + dy);
+      await page.waitForTimeout(150);
+    }
+
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-ripple-clicks",
+      "3",
+      { timeout: 5_000 },
+    );
+    const hits = await page
+      .locator("body")
+      .getAttribute("data-ripple-hits");
+    const lastHitpoint = await page
+      .locator("body")
+      .getAttribute("data-ripple-last-hitpoint");
+    // eslint-disable-next-line no-console
+    console.log(
+      `[interactive-ripples ${engine}] hits=${hits ?? "0"}/3 lastHitpoint=${lastHitpoint ?? "none"}`,
+    );
+
+    if (errors.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`[interactive-ripples ${engine}] errors:`, errors);
+    }
+    expect(errors).toEqual([]);
+  });
+}
+
 for (const name of ENGINE_AWARE_EXAMPLES) {
   for (const engine of ENGINES) {
     test(`${name} loads on engine=${engine}`, async ({ page }) => {
