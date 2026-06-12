@@ -17,33 +17,20 @@
         "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "../js/vendor/three/examples/jsm/",
         "@sparkjsdev/spark": "../../dist/spark.module.js",
+        "@babylonjs/core": "https://cdn.jsdelivr.net/npm/@babylonjs/core@9/+esm",
         "lil-gui": "../js/vendor/lil-gui/dist/lil-gui.esm.js"
       }
     }
   </script>
   <script type="module">
-    import * as THREE from "three";
-    import { SparkRenderer, SparkControls, SplatMesh, dyno } from "@sparkjsdev/spark";
+    import { SparkControls, SplatMesh, dyno } from "@sparkjsdev/spark";
     import { getAssetFileURL } from "../js/get-asset-url.js";
     import GUI from "lil-gui";
+    import { setupSparkExample } from "../js/spark-engine.js";
 
-    // Scene setup
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-
-    const spark = new SparkRenderer({ renderer });
-    scene.add(spark);
-
-    document.body.appendChild(renderer.domElement);
-
-    window.addEventListener('resize', onWindowResize, false);
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    const env = await setupSparkExample({
+      cameraConfig: { fov: 60, near: 0.1, position: [0, 0, 0], lookAt: [0, 0, -1] },
+    });
 
     // Cat model setup
     const splatURL = await getAssetFileURL("cat.spz");
@@ -51,7 +38,7 @@
     cat.quaternion.set(1, 0, 0, 0);
     cat.position.set(0, 0, -1.5);
     cat.scale.set(.5, .5, .5);
-    scene.add(cat);
+    env.add(cat);
 
     const animateT = dyno.dynoFloat(0);
 
@@ -233,14 +220,13 @@
     cat.updateGenerator();
 
     // Animation loop
-    const controls = new SparkControls({ canvas: renderer.domElement });
-    renderer.setAnimationLoop(function animate(time) {
+    const controls = new SparkControls({ canvas: env.canvas });
+    env.run((time) => {
       animateT.value = time / 1000;
       cat.updateVersion();
       cat.position.set(0, -.7, -2.5);
       cat.rotation.set(Math.PI, time / 2000, 0);
-      controls.update(camera);
-      renderer.render(scene, camera);
+      controls.update(env.camera);
     });
   </script>
 </body>
