@@ -8,6 +8,7 @@ node_modules
 node_modules/**
 home/
 home/**
+dist/
 playwright-report/
 test/results/
 test-results/

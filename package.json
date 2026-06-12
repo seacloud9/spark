@@ -38,6 +38,7 @@
     "memory:search": "sh -c 'query=\"${npm_config_query:-$*}\"; query=${query#-- }; test -n \"$query\" && ~/ai-tools/mempalace/bin/mempalace search \"$query\" --wing spark || { echo \"Usage: pnpm run memory:search -- \\\"A-Frame Babylon backend adapters\\\"\"; exit 1; }' --",
     "memory:status": "~/ai-tools/mempalace/bin/mempalace status",
     "memory:wake": "~/ai-tools/mempalace/bin/mempalace wake-up --wing spark",
+    "prepublishOnly": "pnpm run build:wasm && pnpm run build",
     "site:build:relativeurls": "pnpm run build && pnpm run site:clean && node scripts/copy-site-files.js && mkdocs build && node scripts/rename-assets-to-static.js && node scripts/replace-urls.js",
     "site:build": "pnpm run build && pnpm run site:clean && node scripts/copy-site-files.js && mkdocs build && node scripts/rename-assets-to-static.js",
     "site:clean": "node scripts/clean-site-files.js && node scripts/clean-site.js",
@@ -45,13 +46,11 @@
     "site:serve": "node scripts/serve-site.js site",
     "start": "pnpm run dev",
     "test": "node --no-warnings --loader ts-node/esm --test test/*.test.ts",
-    "test:e2e": "pnpm exec playwright test",
+    "test:e2e": "pnpm run build:dev && pnpm exec playwright test",
     "test:e2e:install": "pnpm exec playwright install chromium"
   },
   "repository": "sparkjs-dev/spark",
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "license": "MIT",
   "devDependencies": {
     "@babylonjs/core": "^9.11.0",
@@ -84,12 +83,5 @@
   "peerDependencies": {
     "three": ">=0.180.0"
   },
-  "keywords": [
-    "3d",
-    "three.js",
-    "gsplats",
-    "3dgs",
-    "gaussian",
-    "splats"
-  ]
+  "keywords": ["3d", "three.js", "gsplats", "3dgs", "gaussian", "splats"]
 }

@@ -16,7 +16,6 @@
    <div align="center">
 
   [![License](https://img.shields.io/badge/license-MIT-%23d43e4c)](https://github.com/sparkjsdev/spark/blob/main/LICENSE)
-  [![npm version](https://img.shields.io/npm/v/@sparkjsdev/spark?color=d43e4c)](https://www.npmjs.com/package/@sparkjsdev/spark)
 
   </div>
 
@@ -100,10 +99,10 @@ Copy the following code into an `index.html` file.
 </script>
 ```
 
-### NPM
+### pnpm
 
 ```shell
-npm install @sparkjsdev/spark
+pnpm add @sparkjsdev/spark
 ```
 
 ## Run Examples locally
@@ -112,20 +111,20 @@ Install [Rust](https://www.rust-lang.org/tools/install) if it's not already inst
 
 Next, build Spark by running:
 ```
-npm install
-npm run build:wasm
-npm run build
+pnpm install
+pnpm run build:wasm
+pnpm run build
 ```
-This will first build the Rust Wasm component (`npm run build:wasm`), then Spark itself (`npm run build`).
+This will first build the Rust Wasm component (`pnpm run build:wasm`), then Spark itself (`pnpm run build`).
 
 The examples fetch assets from a remote URL. This step is optional, but offline development and faster loading times are possible if you download and cache the assets files locally with the following command:
 ```
-npm run assets:download
+pnpm run assets:download
 ```
 
 Once you've built Spark and optionally downloaded the assets, you can now run the examples:
 ```
-npm start
+pnpm start
 ```
 This will run a dev server by default at [http://localhost:8080/](http://localhost:8080/). Check the console log output to see if yours is served on a different port.
 
@@ -135,37 +134,42 @@ This will run a dev server by default at [http://localhost:8080/](http://localho
 
 First try cleaning all the build files and re-building everything:
 ```
-npm run clean
-npm install
-npm run build:wasm
-npm run build
+pnpm run clean
+pnpm install
+pnpm run build:wasm
+pnpm run build
 ```
 
 There's no versioning system for assets. If you need to re-download a specific file you can delete that asset file individually or download all assets from scratch:
 
 ```
- npm run assets:clean
- npm run assets:download
+ pnpm run assets:clean
+ pnpm run assets:download
 ```
 
-### Ignore dist directory during development
+### The `dist/` directory is build output
 
-To ignore the dist directory and prevent accidental commits and merge conflicts
+`dist/` is **not tracked in git** — it's regenerated from `src/`
+on every build via `pnpm run build` (production + dev bundles +
+`.d.ts` type declarations). It's listed in `.gitignore`, so any
+local rebuild will never show up in `git status`, you don't need
+the old `git update-index --assume-unchanged` workaround, and
+merge conflicts on built bundles are no longer possible.
+
+Publishing rebuilds automatically: the `prepublishOnly` script
+runs `pnpm run build:wasm && pnpm run build` before `pnpm
+publish`, so a published package always ships fresh artifacts
+matching the committed `src/`. Manual `pnpm run build` is still
+required for local example development (the examples'
+`<script type="importmap">` blocks load
+`/dist/spark.module.js` directly).
+
+If a fresh clone shows `dist/` missing, run:
 
 ```
-git update-index --assume-unchanged dist/*
-```
-
-To revert and be able to commit into to the dist directory again:
-
-```
-git update-index --no-assume-unchanged dist/*
-```
-
-To list ignored files in case of need to troubleshoot
-
-```
-git ls-files -v | grep '^[a-z]' | cut -c3-
+pnpm install
+pnpm run build:wasm
+pnpm run build
 ```
 
 ### Build docs and site
@@ -185,7 +189,7 @@ brew install mkdocs-material
 Edit markdown in `/docs` directory
 
 ```
-npm run docs
+pnpm run docs
 ```
 
 ### Build Spark website
@@ -193,13 +197,13 @@ npm run docs
 Build the static site and docs in a `site` directory.
 
 ```
-npm run site:build
+pnpm run site:build
 ```
 
 You can run any static server in the `site` directory but for convenience you can run
 
 ```
-npm run site:serve
+pnpm run site:serve
 ```
 
 ### Deploy Spark website
@@ -207,11 +211,11 @@ npm run site:serve
 The following command will generate a static site from the `docs` directory and push it to the [repo](https://github.com/sparkjsdev/sparkjsdev.github.io) that hosts the site via `gh-pages`
 
 ```
-npm run site:deploy
+pnpm run site:deploy
 ```
 
 ### Compress splats
 
 To compress a splat to [spz](https://scaniverse.com/spz) run
 
-`npm run assets:compress <file or URL to ply>`
+`pnpm run assets:compress <file or URL to ply>`
