@@ -1,4 +1,4 @@
-import { Gunzip } from "fflate";
+import { Gunzip, zlibSync } from "fflate";
 import * as THREE from "three";
 
 // Miscellaneous utility functions for Spark
@@ -161,6 +161,95 @@ function fromHalfJS(h: number): number {
 export function floatToUint8(v: number): number {
   // Converts from 0..1 float to 0..255 uint8
   return Math.max(0, Math.min(255, Math.round(v * 255)));
+}
+
+export function encodeRgbaPng({
+  pixels,
+  width,
+  height,
+}: {
+  pixels: Uint8Array;
+  width: number;
+  height: number;
+}) {
+  if (width <= 0 || height <= 0) {
+    throw new Error("PNG dimensions must be positive");
+  }
+  if (pixels.length !== width * height * 4) {
+    throw new Error("RGBA pixel data length does not match dimensions");
+  }
+
+  const scanlineBytes = width * 4 + 1;
+  const scanlines = new Uint8Array(scanlineBytes * height);
+  for (let y = 0; y < height; y++) {
+    const rowOffset = y * scanlineBytes;
+    scanlines[rowOffset] = 0;
+    scanlines.set(
+      pixels.subarray(y * width * 4, (y + 1) * width * 4),
+      rowOffset + 1,
+    );
+  }
+
+  const signature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = new Uint8Array(13);
+  const ihdrView = new DataView(ihdr.buffer);
+  ihdrView.setUint32(0, width);
+  ihdrView.setUint32(4, height);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+
+  return concatUint8([
+    signature,
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", zlibSync(scanlines)),
+    pngChunk("IEND", new Uint8Array()),
+  ]);
+}
+
+function pngChunk(type: string, data: Uint8Array) {
+  const typeBytes = new TextEncoder().encode(type);
+  if (typeBytes.length !== 4) {
+    throw new Error("PNG chunk type must be four bytes");
+  }
+
+  const chunk = new Uint8Array(12 + data.length);
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, data.length);
+  chunk.set(typeBytes, 4);
+  chunk.set(data, 8);
+  view.setUint32(8 + data.length, crc32(chunk.subarray(4, 8 + data.length)));
+  return chunk;
+}
+
+function concatUint8(arrays: Uint8Array[]) {
+  const total = arrays.reduce((sum, array) => sum + array.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const array of arrays) {
+    result.set(array, offset);
+    offset += array.length;
+  }
+  return result;
+}
+
+const crcTable = new Uint32Array(256);
+for (let n = 0; n < crcTable.length; n++) {
+  let c = n;
+  for (let k = 0; k < 8; k++) {
+    c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  }
+  crcTable[n] = c >>> 0;
+}
+
+function crc32(data: Uint8Array) {
+  let c = 0xffffffff;
+  for (const byte of data) {
+    c = crcTable[(c ^ byte) & 0xff] ^ (c >>> 8);
+  }
+  return (c ^ 0xffffffff) >>> 0;
 }
 
 // Convert a number -1..1 to a -127..127 int

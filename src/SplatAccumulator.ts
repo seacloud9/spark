@@ -1,13 +1,13 @@
 import * as THREE from "three";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 import { Readback } from "./Readback";
-import { SplatEdit } from "./SplatEdit";
-import {
-  type CovSplatGenerator,
-  type GsplatGenerator,
+import type {
+  CovSplatGenerator,
+  GsplatGenerator,
   SplatGenerator,
 } from "./SplatGenerator";
 import { SplatMesh } from "./SplatMesh";
+import { collectThreeSparkScene } from "./backends/three/ThreeSceneQuery";
 import {
   LN_SCALE_MAX,
   LN_SCALE_MIN,
@@ -470,29 +470,12 @@ export class SplatAccumulator {
     this.time = time;
     this.deltaTime = time - previous.time;
 
-    const allGenerators: SplatGenerator[] = [];
-    scene.traverse((node) => {
-      if (node instanceof SplatGenerator) {
-        if (!camera.layers || camera.layers.test(node.layers)) {
-          allGenerators.push(node);
-        }
-      }
-    });
-
-    const globalEditsSet = new Set<SplatEdit>();
-    scene.traverseVisible((node) => {
-      if (node instanceof SplatEdit) {
-        let ancestor = node.parent;
-        while (ancestor != null && !(ancestor instanceof SplatMesh)) {
-          ancestor = ancestor.parent;
-        }
-        if (ancestor == null) {
-          // Not part of a SplatMesh so it's a global edit
-          globalEditsSet.add(node);
-        }
-      }
-    });
-    const globalEdits = Array.from(globalEditsSet);
+    const { allGenerators, globalEdits, visibleGenerators } =
+      collectThreeSparkScene({
+        scene,
+        camera,
+        isSplatMesh: (node) => node instanceof SplatMesh,
+      });
 
     for (const object of allGenerators) {
       try {
@@ -517,15 +500,6 @@ export class SplatAccumulator {
         object.generatorError = error;
       }
     }
-
-    const visibleGenerators: SplatGenerator[] = [];
-    scene.traverseVisible((node) => {
-      if (node instanceof SplatGenerator) {
-        if (!camera.layers || camera.layers.test(node.layers)) {
-          visibleGenerators.push(node);
-        }
-      }
-    });
 
     const splatCounts = visibleGenerators.map(
       (generator) => generator.numSplats,
