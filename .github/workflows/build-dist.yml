@@ -24,16 +24,20 @@ jobs:
         with:
           token: ${{ steps.generate-token.outputs.token }}
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22.x'
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build Dist
-        run: npm run build
+        run: pnpm run build
 
       - name: Commit and push changes
         env:

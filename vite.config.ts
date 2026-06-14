@@ -14,7 +14,7 @@ if (!fs.existsSync(sparkRsDirectory)) {
     "\x1b[31m Rust Wasm component not found, make sure to build them first.\x1b[0m",
   );
   console.error(
-    "\x1b[31m Install Rust and run:\x1b[1m npm run build:wasm\x1b[0m",
+    "\x1b[31m Install Rust and run:\x1b[1m pnpm run build:wasm\x1b[0m",
   );
   console.error(
     "\x1b[31m************************************************************************\x1b[0m",
@@ -30,7 +30,7 @@ if (!localAssetsDirectoryExist) {
   );
   console.log(" Examples assets will be fetched from an external server.");
   console.log(
-    " To work offline you can download them: npm run assets:download",
+    " To work offline you can download them: pnpm run assets:download",
   );
   console.log(
     "************************************************************************",

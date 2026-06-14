@@ -125,7 +125,7 @@ The update method handles:
 
 ## Adding a simple GUI to configure controls
 
-Add `lil-gui` to your package (`npm add lil-gui`) to provide a simple configurable GUI.
+Add `lil-gui` to your package (`pnpm add lil-gui`) to provide a simple configurable GUI.
 
 ```typescript
 import GUI from "lil-gui";

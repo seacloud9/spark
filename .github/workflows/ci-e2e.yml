@@ -74,7 +74,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run Playwright (parity gate)
-        run: pnpm exec playwright test
+        run: pnpm run test:e2e
 
       - name: Upload parity artefacts
         # Always upload so reviewers can download the per-backend PNGs

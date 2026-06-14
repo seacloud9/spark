@@ -9,7 +9,11 @@
     "ignoreUnknown": false,
     "ignore": [
       "dist/*",
+      "node_modules",
+      "node_modules/**",
       "examples/assets/",
+      "playwright-report",
+      "test-results",
       "examples/showcase/hello-gsplat",
       "examples/js",
       "rust",
@@ -19,7 +23,9 @@
       "*.backup*",
       "examples/**/spark.module.js",
       "examples/**/*.json",
-      "examples/**/pkg"
+      "examples/**/pkg",
+      "mempalace.yaml",
+      "entities.json"
     ]
   },
   "formatter": {

@@ -14,7 +14,7 @@ This will load the splat file and create an LoD version of it in a background We
 
 Create the LoD tree from the command line and load the resulting .RAD file:
 ```shell
-npm run build-lod -- my-splats.ply more-splats.spz --quality
+pnpm run build-lod -- my-splats.ply more-splats.spz --quality
 ```
 This will output files `my-splats-lod.rad` and `more-splats-lod.rad`. These can be loaded directly by Spark:
 ```javascript
@@ -91,14 +91,14 @@ The above parameters adjust the global splat LoD parameters, but you can also ad
 
 To pre-build an LoD tree for a splat file and output a `.RAD` that can be loaded faster in Spark and even streamed in, use the `build-lod` command-line tool:
 ```shell
-npm run build-lod -- my-splats.ply more-splats.spz [..options]
+pnpm run build-lod -- my-splats.ply more-splats.spz [..options]
 ```
 
-NOTE 1: The additional `--` in the options tells `npm` that the following options are for the `build-lod` program. This is necessary if you have additional options that start with `-`/`--`, which will confuse `npm`.
+NOTE 1: The additional `--` in the options tells `pnpm` that the following options are for the `build-lod` program. This is necessary if you have additional options that start with `-`/`--`, which will confuse `pnpm`.
 
 NOTE 2: Building and running the `build-lod` tool requires Rust to be installed. The recommended approach is by installing `rustup` as described on the main Rust page: [https://rust-lang.org/tools/install/](https://rust-lang.org/tools/install/)
 
-Calling `npm run build-lod` invokes the Rust program in `rust/build-lod`, and you can build or run it directly:
+Calling `pnpm run build-lod` invokes the Rust program in `rust/build-lod`, and you can build or run it directly:
 ```shell
 cd rust/build-lod
 cargo build --release
@@ -108,7 +108,7 @@ The `--release` option is important, without it the LoD building will run very s
 
 To get help for the command, run it without any parameters:
 ```shell
-npm run build-lod
+pnpm run build-lod
 Usage: build-lod
   [--unlod]              // Remove LoD nodes with children from file
   [--csplat] [--gsplat]  // Use compact (csplat) or higher-precision (default gsplat) splat encoding
@@ -129,6 +129,6 @@ When using `--rad-chunked` the resulting files will be a small header file `my-s
 
 The tool `build-lod` supports most splat file formats: .ply (including PlayCanvas compressed), .spz, .splat, .ksplat, .sog, .zip (containing SOGS files). It also accepts multiple file inputs, so you can for example run:
 ```shell
-npm run build-lod -- splats-dir/*.spz --quality
+pnpm run build-lod -- splats-dir/*.spz --quality
 ```
 Each file will have an `-lod.rad` suffix and extension added to it.

@@ -41,18 +41,18 @@ Copy and paste code below in an `index.html` file or remix in the [Web Playgroun
 </script>
 ```
 
-## Install with NPM
+## Install with pnpm
 
 ```shell
-npm install @sparkjsdev/spark
+pnpm add @sparkjsdev/spark
 ```
 ## Develop and contribute to Spark
 
 Build Spark (It requires [Rust](https://www.rust-lang.org/tools/install) installed in your machine)
 ```
-npm install
-npm run build:wasm
-npm run dev
+pnpm install
+pnpm run build:wasm
+pnpm run dev
 ```
 
 This will run a Web server at [http://localhost:8080/](http://localhost:8080/) with the examples.
