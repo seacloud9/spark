@@ -52,10 +52,19 @@
       "Bash(grep -hn \"^import\\\\|from \\\\\"\\\\\\\\.\\\\\\\\.\" test/*.test.ts)",
       "Bash(mv test/e2e/* test/e2e/)",
       "Bash(mv test/fixtures/* test/fixtures/)",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "Bash(git rm *)",
+      "Bash(tee /tmp/aframe-raycast.log)",
+      "Bash(git remote *)",
+      "Bash(git fetch *)",
+      "Bash(git cherry-pick *)",
+      "Bash(git branch *)",
+      "Bash(test -f /mnt/c/tmp/commit-msg.txt && echo exists || echo new; touch /mnt/c/tmp/commit-msg.txt; echo done)",
+      "PowerShell(if \\(!\\(Test-Path \"c:/tmp\"\\)\\) { New-Item -ItemType Directory -Path \"c:/tmp\" -Force | Out-Null }; \"test\" | Out-File -FilePath \"c:/tmp/commit-msg.txt\" -Encoding utf8; Get-Content \"c:/tmp/commit-msg.txt\")"
     ],
     "additionalDirectories": [
-      "c:\\Users\\brend\\.claude\\projects\\c--Users-brend-exp-spark\\memory"
+      "c:\\Users\\brend\\.claude\\projects\\c--Users-brend-exp-spark\\memory",
+      "\\mnt\\c\\tmp"
     ]
   }
 }
