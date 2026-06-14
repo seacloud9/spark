@@ -211,8 +211,10 @@
       );
     }
 
+    const queryParams = new URLSearchParams(window.location.search);
+
     // Load a demo splat and a floor model to give context
-    const splatName = "painted-bedroom.spz";
+    const splatName = queryParams.get("testHolesAsset") ?? "painted-bedroom.spz";
     const splatURL = await getAssetFileURL(splatName);
     const splatMesh = new SplatMesh({ url: splatURL });
     await splatMesh.initialized;
@@ -363,8 +365,19 @@
     const raycaster = new THREE.Raycaster();
     // Increase threshold to detect splats more reliably, especially after modifications
     raycaster.params.Points = { threshold: 0.5 };
-    
+
+    // Interaction smoke probes. The e2e suite asserts pointer delivery
+    // hard, then logs hit/impulse counts because exact hit landing can
+    // vary with backend timing and the click-depth stacking state.
+    let holesDownCount = 0;
+    let holesHitCount = 0;
+    let holesImpulseCount = 0;
+    document.body.dataset.holesReady = "true";
+
     env.canvas.addEventListener("pointerdown", (event) => {
+      holesDownCount += 1;
+      document.body.dataset.holesDowns = String(holesDownCount);
+
       const rect = env.canvas.getBoundingClientRect();
       const ndc = new THREE.Vector2(
         ((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -374,9 +387,12 @@
       const hits = raycaster.intersectObject(splatMesh, false);
       const hit = hits && hits.length ? hits[0] : null;
       if (!hit) {
+        document.body.dataset.holesMisses = String(holesDownCount - holesHitCount);
         console.log("No hit detected at NDC:", ndc, "- try clicking closer to visible splats");
         return;
       }
+      holesHitCount += 1;
+      document.body.dataset.holesHits = String(holesHitCount);
       console.log("Hit detected at distance:", hit.distance.toFixed(3), "point:", hit.point);
       const localPoint = splatMesh.worldToLocal(hit.point.clone());
       // Compute local ray direction for depth stacking
@@ -403,6 +419,13 @@
       slot.radius.value = uExplosionRadius.value; // use GUI-controlled radius
       slot.start.value = animationTime.value; // start time for this impulse
       slot.active.value = 1.0;
+      holesImpulseCount += 1;
+      document.body.dataset.holesImpulses = String(holesImpulseCount);
+      document.body.dataset.holesLastHitpoint = [
+        depthPoint.x.toFixed(3),
+        depthPoint.y.toFixed(3),
+        depthPoint.z.toFixed(3),
+      ].join(",");
       // Use circular buffer - overwrite oldest when full
       impulseWriteIndex = (impulseWriteIndex + 1) % MAX_IMPULSES;
 
@@ -452,5 +475,3 @@
 </body>
 
 </html>
-
-

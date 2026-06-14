@@ -49,16 +49,28 @@
       const splats = new SplatMesh({ url, ...options });
       splats.position.set(...position);
       group.add(splats);
+      return splats;
     }
 
     const url = await getAssetFileURL("distant-igloo.spz");
-    makeSplats(url, [0, -1.5, 0], { extSplats: false });
-    makeSplats(url, [0, 1.5, 0], { extSplats: true });
+    const packedMesh = makeSplats(url, [0, -1.5, 0], { extSplats: false });
+    const extMesh = makeSplats(url, [0, 1.5, 0], { extSplats: true });
+    await Promise.all([packedMesh.initialized, extMesh.initialized]);
+    document.body.dataset.extSplatsReady = "true";
+    document.body.dataset.extSplatsChildren = String(group.children.length);
+    document.body.dataset.extSplatsPacked = String(packedMesh.packedSplats != null);
+    document.body.dataset.extSplatsExtended = String(extMesh.extSplats != null);
+    document.body.dataset.extSplatsPackedCount = String(packedMesh.numSplats);
+    document.body.dataset.extSplatsExtendedCount = String(extMesh.numSplats);
+    let frameCount = 0;
 
     const controls = new SparkControls({ canvas: env.renderer.domElement });
 
     env.run((time) => {
+      frameCount += 1;
       group.position.y = Math.sin(time / 1000) * 1.5;
+      document.body.dataset.extSplatsFrames = String(frameCount);
+      document.body.dataset.extSplatsGroupY = group.position.y.toFixed(3);
       controls.update(env.camera);
     });
   </script>

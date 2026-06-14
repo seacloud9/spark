@@ -39,8 +39,14 @@
     cat.position.set(0, 0, -1.5);
     cat.scale.set(.5, .5, .5);
     env.add(cat);
+    cat.initialized.then(() => {
+      document.body.dataset.shaderEffectsReady = "true";
+      document.body.dataset.shaderEffectsSplats = String(cat.numSplats);
+    });
 
     const animateT = dyno.dynoFloat(0);
+    let shaderEffectFrames = 0;
+    let shaderEffectChanges = 0;
 
     // Effect parameters and GUI
     const effectParams = {
@@ -48,13 +54,23 @@
       intensity: 0.8
     };
 
+    function applyShaderEffect(effect = effectParams.effect, intensity = effectParams.intensity) {
+      effectParams.effect = effect;
+      effectParams.intensity = intensity;
+      shaderEffectChanges += 1;
+      cat.updateGenerator();
+      document.body.dataset.shaderEffectsChanges = String(shaderEffectChanges);
+      document.body.dataset.shaderEffectsActive = effectParams.effect;
+      document.body.dataset.shaderEffectsIntensity = String(effectParams.intensity);
+    }
+
     const gui = new GUI({ title: "Fractal Effects" });
     gui.add(effectParams, "effect", ["Electronic", "Deep Meditation", "Waves", "Disintegrate", "Flare"])
       .name("Effect Type")
-      .onChange(() => cat.updateGenerator());
+      .onChange(() => applyShaderEffect());
     gui.add(effectParams, "intensity", 0, 1, 0.01)
       .name("Intensity")
-      .onChange(() => cat.updateGenerator());
+      .onChange(() => applyShaderEffect());
 
     // Shader modifier setup
     cat.objectModifier = dyno.dynoBlock(
@@ -218,10 +234,15 @@
     );
 
     cat.updateGenerator();
+    document.body.dataset.shaderEffectsActive = effectParams.effect;
+    document.body.dataset.shaderEffectsIntensity = String(effectParams.intensity);
+    window.sparkShaderEffects = { applyEffect: applyShaderEffect };
 
     // Animation loop
     const controls = new SparkControls({ canvas: env.canvas });
     env.run((time) => {
+      shaderEffectFrames += 1;
+      document.body.dataset.shaderEffectsFrames = String(shaderEffectFrames);
       animateT.value = time / 1000;
       cat.updateVersion();
       cat.position.set(0, -.7, -2.5);

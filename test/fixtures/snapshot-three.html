@@ -71,6 +71,16 @@
         spark.time = sceneCfg.time;
       }
 
+      window.spark = spark;
+      window.sparkPerfBenchmark = {
+        backend: "three",
+        scene: sceneName,
+        async renderFrame() {
+          renderer.render(scene, camera);
+          return spark.perfMetrics;
+        },
+      };
+
       await spark.update({ scene, camera });
       renderer.render(scene, camera);
       await new Promise((resolve) => requestAnimationFrame(resolve));

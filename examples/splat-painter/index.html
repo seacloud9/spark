@@ -89,7 +89,9 @@
     const MIN_BRUSH_DEPTH = 0.1;
     const MAX_BRUSH_DEPTH = 100.0;
 
-    const assetID = "greyscale-bedroom.spz";
+    const queryParams = new URLSearchParams(window.location.search);
+    const testPainterAsset = queryParams.get("testPainterAsset");
+    const assetID = testPainterAsset ?? "greyscale-bedroom.spz";
     let currentSplatMesh = null;
     let currentFileName = "painted-splat";
     let currentSplatMeshOriginalRGBA = null;
@@ -200,6 +202,7 @@
       }
       // Extract filename for export
       currentFileName = url.split("/").pop().split("?")[0].split(".")[0] || "painted-splat";
+      document.body.dataset.painterFileName = currentFileName;
       // Create an empty RgbaArray that will be populated after the mesh loads
       currentSplatMeshOriginalRGBA = new RgbaArray();
       currentSplatMesh = await paintableSplatMesh(
@@ -244,7 +247,9 @@
       currentSplatMesh.updateGenerator();
     }
 
-    await loadSplatFromFile(await getAssetFileURL(assetID));
+    await loadSplatFromFile(testPainterAsset
+      ? new URL(`../../test/fixtures/assets/${testPainterAsset}`, window.location.href).href
+      : await getAssetFileURL(assetID));
     // Interaction smoke gate: lets Playwright wait until the splat mesh
     // is loaded and the worldModifier is installed. Same dataset-flag
     // template as raycasting / interactive-ripples / interactive-deform.
@@ -255,6 +260,8 @@
     let moveCount = 0;
     let upCount = 0;
     let rgbaUpdateCount = 0;
+    let rgbaUpdateQueued = false;
+    let rgbaUpdateFrame = 0;
 
     const raycaster = new THREE.Raycaster();
     let isDragging = false;
@@ -279,6 +286,7 @@
     }
 
     function updateRgba() {
+      rgbaUpdateQueued = false;
       rgbaUpdateCount += 1;
       document.body.dataset.painterRgbaUpdates = String(rgbaUpdateCount);
       if (currentSplatMesh) {
@@ -297,6 +305,19 @@
         currentSplatMesh.splatRgba = newRgba;
         currentSplatMesh.updateGenerator();
       }
+    }
+
+    function requestRgbaUpdate() {
+      rgbaUpdateQueued = true;
+      document.body.dataset.painterRgbaQueued = "true";
+      if (rgbaUpdateFrame !== 0) return;
+
+      rgbaUpdateFrame = requestAnimationFrame(() => {
+        rgbaUpdateFrame = 0;
+        if (!rgbaUpdateQueued) return;
+        updateRgba();
+        document.body.dataset.painterRgbaQueued = "false";
+      });
     }
 
     env.canvas.addEventListener('pointermove', (event) => {
@@ -319,7 +340,7 @@
 
         // Apply painting effect while dragging
         if (isDragging) {
-          updateRgba();
+          requestRgbaUpdate();
         }
       });
 
@@ -327,7 +348,7 @@
       downCount += 1;
       document.body.dataset.painterDowns = String(downCount);
       isDragging = true;
-      updateRgba();
+      requestRgbaUpdate();
     });
 
     env.canvas.addEventListener('pointerup', (event) => {

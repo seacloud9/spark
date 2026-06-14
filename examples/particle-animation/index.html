@@ -290,6 +290,13 @@
     let clouds = createCloudMesh(params, BOUNDS);
     clouds.position.set(0, -0.5, -2);
     env.add(clouds);
+    let cloudRecreateCount = 0;
+    let cloudFrameCount = 0;
+
+    clouds.initialized.then(() => {
+      document.body.dataset.particleAnimationReady = "true";
+      document.body.dataset.particleAnimationSplats = String(clouds.numSplats);
+    });
 
     function recreateClouds() {
       if (clouds) {
@@ -297,9 +304,27 @@
         clouds.dispose();
       }
 
+      cloudRecreateCount += 1;
       clouds = createCloudMesh(params, BOUNDS);
       clouds.position.set(0, -0.5, -2);
       env.add(clouds);
+      document.body.dataset.particleAnimationRecreates = String(cloudRecreateCount);
+      document.body.dataset.particleAnimationPreset = params._activePreset ?? "custom";
+      clouds.initialized.then(() => {
+        document.body.dataset.particleAnimationReady = "true";
+        document.body.dataset.particleAnimationSplats = String(clouds.numSplats);
+      });
+    }
+
+    function applyPreset(name) {
+      const preset = presets[name];
+      if (!preset) throw new Error(`Unknown cloud preset: ${name}`);
+      params._activePreset = name;
+      Object.assign(params, preset);
+      recreateClouds();
+      for (const controller of gui.controllersRecursive()) {
+        controller.updateDisplay();
+      }
     }
 
     // cloud parameter controls
@@ -338,11 +363,7 @@
       presetsFolder.add(
         {
           [name]: () => {
-            Object.assign(params, preset);
-            recreateClouds();
-            for (const controller of gui.controllersRecursive()) {
-              controller.updateDisplay();
-            }
+            applyPreset(name);
           },
         },
         name,
@@ -350,9 +371,12 @@
     }
 
     env.run((time, dtMs) => {
+      cloudFrameCount += 1;
+      document.body.dataset.particleAnimationFrames = String(cloudFrameCount);
       const deltaTime = dtMs * 0.001;
       controls.update(deltaTime, env.camera);
     });
+    window.sparkParticleAnimation = { applyPreset };
 
   </script>
 </body>

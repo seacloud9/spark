@@ -50,7 +50,7 @@
     import GUI from "lil-gui";
     import { setupSparkExample } from "../js/spark-engine.js";
 
-    const initialWorld = "Coit Tower, SF";
+    const defaultInitialWorld = "Coit Tower, SF";
     const worlds = {
       "Hobbiton": {
         url: "https://storage.googleapis.com/forge-dev-public/asundqui/rad/260219/tijerin_w6_hobbiton-lod.rad",
@@ -86,6 +86,9 @@
         description: "100M splats scanned by Andrii Shramko",
       },
     };
+    const queryParams = new URLSearchParams(window.location.search);
+    const testInitialWorld = queryParams.get("testInitialWorld");
+    const initialWorld = testInitialWorld && worlds[testInitialWorld] ? testInitialWorld : defaultInitialWorld;
 
     const title = document.getElementById("title");
     const subtitle = document.getElementById("subtitle");
@@ -107,6 +110,8 @@
       worldKey: initialWorld,
     };
     let world = null;
+    let selectedWorldCount = 0;
+    let frameCount = 0;
 
     function selectWorld(worldKey) {
       if (world) {
@@ -116,6 +121,7 @@
 
       const { url, quaternion, position, scale, background, description, cameraPosition, cameraQuaternion, lodSplatScale, highDpi } = worlds[worldKey];
       world = new SplatMesh({ url, paged: true });
+      selectedWorldCount += 1;
       world.quaternion.set(...quaternion ?? [0, 0, 0, 1]).normalize();
       world.position.set(...(position ?? [0, 0, 0]));
       world.scale.setScalar(scale ?? 1.0);
@@ -134,7 +140,40 @@
       // babylon that's host.threeRenderer (the internal renderer); on
       // three/aframe it's the visible WebGLRenderer.
       env.renderer.setPixelRatio(highDpi ? window.devicePixelRatio : 1);
+      document.body.dataset.streamingLodReady = "true";
+      document.body.dataset.streamingLodWorld = worldKey;
+      document.body.dataset.streamingLodSelects = String(selectedWorldCount);
+      document.body.dataset.streamingLodPaged = String(world.paged != null);
+      document.body.dataset.streamingLodLodScale = String(env.spark.lodSplatScale);
+      document.body.dataset.streamingLodUrl = url.substring(url.lastIndexOf("/") + 1);
+
+      const selectedWorld = world;
+      void selectedWorld.initialized.then(() => {
+        if (world !== selectedWorld) return;
+        document.body.dataset.streamingLodSplats = String(selectedWorld.numSplats ?? 0);
+      });
     }
+
+    window.sparkStreamingLod = {
+      selectWorld(worldKey) {
+        if (!worlds[worldKey]) {
+          throw new Error(`Unknown streaming LoD world: ${worldKey}`);
+        }
+        settings.worldKey = worldKey;
+        selectWorld(worldKey);
+        return {
+          paged: world?.paged != null,
+          selects: selectedWorldCount,
+          worldKey,
+        };
+      },
+      setLodScale(value) {
+        env.spark.lodSplatScale = value;
+        document.body.dataset.streamingLodLodScale = String(value);
+        return env.spark.lodSplatScale;
+      },
+      worlds: Object.keys(worlds),
+    };
 
     selectWorld(settings.worldKey);
 
@@ -145,6 +184,8 @@
     const controls = new SparkControls({ canvas: env.renderer.domElement });
 
     env.run(() => {
+      frameCount += 1;
+      document.body.dataset.streamingLodFrames = String(frameCount);
       controls.update(env.camera);
     });
   </script>

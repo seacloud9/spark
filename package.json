@@ -47,7 +47,9 @@
     "start": "pnpm run dev",
     "test": "node --no-warnings --loader ts-node/esm --test test/*.test.ts",
     "test:e2e": "pnpm run build:dev && pnpm exec playwright test",
-    "test:e2e:install": "pnpm exec playwright install chromium"
+    "test:e2e:install": "pnpm exec playwright install chromium",
+    "test:perf": "pnpm run build:dev && pnpm exec playwright test --config=playwright.perf.config.ts",
+    "test:perf:smoke": "SPARK_PERF_SCENES=axes SPARK_PERF_BACKENDS=three,aframe,babylon-texture,babylon-native SPARK_PERF_FRAMES=3 SPARK_PERF_WARMUP_FRAMES=1 pnpm run test:perf"
   },
   "repository": "sparkjs-dev/spark",
   "files": ["dist"],

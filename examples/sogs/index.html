@@ -42,6 +42,7 @@
     const sutroTower = new SplatMesh({ url: splatURL });
     sutroTower.quaternion.set(1, 0, 0, 0);
     env.add(sutroTower);
+    await sutroTower.initialized;
 
     // Three.js Sky helper is added to the same scene Spark renders, so under
     // aframe (structural mock against the same Three triple) and babylon
@@ -61,8 +62,32 @@
     controls.minDistance = 0.2;
     controls.maxDistance = 8.0;
     controls.enablePan = false;
+    let frameCount = 0;
+
+    function recordSogsState() {
+      document.body.dataset.sogsSun = sky.material.uniforms.sunPosition.value.toArray().map((value) => value.toFixed(3)).join(",");
+      document.body.dataset.sogsTarget = controls.target.toArray().map((value) => value.toFixed(3)).join(",");
+      document.body.dataset.sogsFrames = String(frameCount);
+    }
+
+    document.body.dataset.sogsReady = "true";
+    document.body.dataset.sogsSplats = String(sutroTower.numSplats);
+    document.body.dataset.sogsSky = String(sky.parent === env.scene);
+    recordSogsState();
+
+    window.sparkSogs = {
+      setSun(phiDegrees, thetaDegrees) {
+        const nextPhi = THREE.MathUtils.degToRad(phiDegrees);
+        const nextTheta = THREE.MathUtils.degToRad(thetaDegrees);
+        sky.material.uniforms.sunPosition.value.setFromSphericalCoords(1, nextPhi, nextTheta);
+        recordSogsState();
+        return sky.material.uniforms.sunPosition.value.toArray();
+      },
+    };
 
     env.run(() => {
+      frameCount += 1;
+      recordSogsState();
       controls.update();
     });
   </script>

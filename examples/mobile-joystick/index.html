@@ -55,6 +55,9 @@
     const env = await setupSparkExample({
       cameraConfig: { fov: 60, near: 0.1, position: [0, 0, 0], lookAt: [0, 0, -1] },
     });
+    const queryParams = new URLSearchParams(window.location.search);
+    const forceMobile = queryParams.get("testMobile") === "1";
+    const testAsset = queryParams.get("testAsset");
 
     // Reparent env.camera into a cameraRig group so joystick / WASD
     // translates the rig and SparkControls rotates the camera child.
@@ -66,17 +69,18 @@
     cameraRig.add(env.camera);
 
     // Load the valley environment
-    const splatURL = await getAssetFileURL("valley.spz");
+    const splatURL = await getAssetFileURL(testAsset ?? "valley.spz");
     const splat = new SplatMesh({ url: splatURL });
     splat.quaternion.set(1, 0, 0, 0);
     splat.position.set(0, 0, -3);
     env.add(splat);
+    await splat.initialized;
 
     // Desktop controls (mouse/keyboard)
     const controls = new SparkControls({ canvas: env.renderer.domElement });
 
     // Mobile joystick
-    const isMobile = isMobileDevice();
+    const isMobile = forceMobile || isMobileDevice();
     const info = document.getElementById('info');
 
     if (isMobile) {
@@ -94,23 +98,53 @@
 
     // Movement settings
     const MOVE_SPEED = 2.0;
+    let frameCount = 0;
+    let appliedInputs = 0;
+
+    function recordMobileJoystickState() {
+      document.body.dataset.mobileJoystickRig = cameraRig.position.toArray().map((value) => value.toFixed(3)).join(",");
+      document.body.dataset.mobileJoystickFrames = String(frameCount);
+      document.body.dataset.mobileJoystickInputs = String(appliedInputs);
+    }
+
+    function applyJoystickInput(inputX, inputY, deltaTimeMs) {
+      if (inputX !== 0 || inputY !== 0) {
+        const dtSec = deltaTimeMs / 1000;
+        const move = new THREE.Vector3(inputX, 0, inputY);
+        move.multiplyScalar(MOVE_SPEED * dtSec);
+        move.applyQuaternion(cameraRig.quaternion);
+        cameraRig.position.add(move);
+        appliedInputs += 1;
+        recordMobileJoystickState();
+      }
+    }
+
+    document.body.dataset.mobileJoystickReady = "true";
+    document.body.dataset.mobileJoystickMobile = String(isMobile);
+    document.body.dataset.mobileJoystickSplats = String(splat.numSplats);
+    document.body.dataset.mobileJoystickAsset = splatURL.substring(splatURL.lastIndexOf("/") + 1);
+    recordMobileJoystickState();
+
+    window.sparkMobileJoystick = {
+      applyInput(inputX, inputY, deltaTimeMs = 1000) {
+        applyJoystickInput(inputX, inputY, deltaTimeMs);
+        return {
+          inputs: appliedInputs,
+          rig: cameraRig.position.toArray(),
+        };
+      },
+    };
 
     env.run((time, deltaTime) => {
+      frameCount += 1;
+      recordMobileJoystickState();
       // Update desktop controls (handles mouse look on both desktop & mobile)
       controls.update(cameraRig);
 
       // Apply mobile joystick movement
       if (isMobile) {
         const input = getMobileInput();
-        if (input.x !== 0 || input.y !== 0) {
-          // deltaTime from env.run is in ms; convert to seconds for the
-          // 2.0 units/sec MOVE_SPEED below.
-          const dtSec = deltaTime / 1000;
-          const move = new THREE.Vector3(input.x, 0, input.y);
-          move.multiplyScalar(MOVE_SPEED * dtSec);
-          move.applyQuaternion(cameraRig.quaternion);
-          cameraRig.position.add(move);
-        }
+        applyJoystickInput(input.x, input.y, deltaTime);
       }
     });
   </script>

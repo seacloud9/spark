@@ -50,11 +50,16 @@
 			Source: https://www.patreon.com/cw/DanyBittel
 		*/
 		const splatURL = await getAssetFileURL("fly.spz");
-		const fly = new SplatMesh({ url: splatURL });
-		const animateT = dyno.dynoFloat(0);
-		fly.quaternion.set(1, 0, 0, 0);
-		fly.position.copy(flyPos);
-		env.add(fly);
+			const fly = new SplatMesh({ url: splatURL });
+			const animateT = dyno.dynoFloat(0);
+			fly.quaternion.set(1, 0, 0, 0);
+			fly.position.copy(flyPos);
+			env.add(fly);
+			fly.initialized.then(() => {
+				document.body.dataset.dissolveEffectsReady = "true";
+				document.body.dataset.dissolveEffectsSplats = String(fly.numSplats);
+			});
+			let dissolveFrameCount = 0;
 
 		fly.objectModifier = dyno.dynoBlock({ gsplat: dyno.Gsplat }, { gsplat: dyno.Gsplat }, ({ gsplat }) => {
 			const d = new dyno.Dyno({
@@ -103,15 +108,25 @@
 			return { gsplat };
 		});
 
-		let startTime = 0;
-		env.run((time) => {
-			if (startTime === 0) startTime = time;
-			const elapsedTime = (time - startTime) / 1000;
+			let startTime = 0;
+			function seekDissolve(seconds) {
+				animateT.value = seconds;
+				fly.needsUpdate = true;
+				document.body.dataset.dissolveEffectsSeek = String(seconds);
+			}
+			window.sparkDissolveEffects = { seek: seekDissolve };
 
-			controls.update();
-			animateT.value = elapsedTime;
-			fly.needsUpdate = true;
-		});
+			env.run((time) => {
+				dissolveFrameCount += 1;
+				document.body.dataset.dissolveEffectsFrames = String(dissolveFrameCount);
+				if (startTime === 0) startTime = time;
+				const elapsedTime = (time - startTime) / 1000;
+
+				controls.update();
+				animateT.value = elapsedTime;
+				document.body.dataset.dissolveEffectsElapsed = elapsedTime.toFixed(3);
+				fly.needsUpdate = true;
+			});
 	</script>
 </body>
 

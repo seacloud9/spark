@@ -49,21 +49,27 @@
       clearColor: 0xffffff,
     });
 
+    const queryParams = new URLSearchParams(window.location.search);
+    const butterflyCount = Number(queryParams.get("testButterflyCount") ?? 6);
+    const catAsset = queryParams.get("testCatAsset") ?? "cat.spz";
+
     let splatURL = await getAssetFileURL("butterfly-ai.spz");
     const butterflySplats = new PackedSplats({ url: splatURL });
     const butterflies = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < butterflyCount; i++) {
       const splat = new SplatMesh({ packedSplats: butterflySplats });
       splat.quaternion.set(1, 0, 0, 0);
       env.add(splat);
       butterflies.push(splat);
     }
+    await butterflySplats.initialized;
 
-    splatURL = await getAssetFileURL("cat.spz");
+    splatURL = await getAssetFileURL(catAsset);
     const cat = new SplatMesh({ url: splatURL });
     cat.quaternion.set(1, 0, 0, 0);
     cat.scale.setScalar(0.5);
     env.add(cat);
+    await cat.initialized;
 
     // OrbitControls hooks pointer events on the visible canvas. Under the
     // Babylon backend the visible canvas and env.renderer's internal canvas
@@ -74,20 +80,45 @@
     controls.maxDistance = 20;
     controls.update();
 
-    const RADIUS = 2;
+    let radius = 2;
+    let frameCount = 0;
+
+    function recordMultipleSplatsState() {
+      document.body.dataset.multipleSplatsReady = "true";
+      document.body.dataset.multipleSplatsButterflies = String(butterflies.length);
+      document.body.dataset.multipleSplatsSharedPacked = String(butterflies.every((splat) => splat.packedSplats === butterflySplats));
+      document.body.dataset.multipleSplatsButterflyCount = String(butterflySplats.numSplats);
+      document.body.dataset.multipleSplatsCatCount = String(cat.numSplats);
+      document.body.dataset.multipleSplatsRadius = String(radius);
+      document.body.dataset.multipleSplatsFrames = String(frameCount);
+      document.body.dataset.multipleSplatsCatY = cat.position.y.toFixed(3);
+      document.body.dataset.multipleSplatsFirstX = (butterflies[0]?.position.x ?? 0).toFixed(3);
+    }
+
+    recordMultipleSplatsState();
+
+    window.sparkMultipleSplats = {
+      setRadius(value) {
+        radius = value;
+        recordMultipleSplatsState();
+        return { radius };
+      },
+    };
 
     env.run((time) => {
+      frameCount += 1;
       controls.update();
 
       // Rotate food
       for (let i = 0; i < butterflies.length; i++) {
         const ang = (-time / 10000) + i / butterflies.length * Math.PI * 2;
-        butterflies[i].position.set(Math.cos(ang) * RADIUS, Math.sin(ang) * RADIUS - 0.2, 0);
+        butterflies[i].position.set(Math.cos(ang) * radius, Math.sin(ang) * radius - 0.2, 0);
         butterflies[i].rotation.y = i + time / 4000;
       }
 
       // Animate food master
       cat.position.y = -0.8 + Math.sin(time / 1000) * 0.1;
+      recordMultipleSplatsState();
     });
   </script>
 </body>

@@ -56,6 +56,9 @@
       }
     </script>
     <script type="module">
+      import "@babylonjs/core/Shaders/default.vertex.js";
+      import "@babylonjs/core/Shaders/default.fragment.js";
+      import "@babylonjs/core/Shaders/standard.fragment.js";
       import {
         ArcRotateCamera,
         Color3,
@@ -227,7 +230,9 @@
       torusKnot.material = knotMaterial;
 
       await scene.whenReadyAsync();
+      document.body.dataset.babylonNativeReady = "true";
 
+      let nativeFrames = 0;
       engine.runRenderLoop(async () => {
         // Gentle rotation so the cross-mesh depth sort + the Babylon
         // mesh occlusion are both visible without user input.
@@ -251,6 +256,8 @@
 
         await host.renderOnce();
         scene.render();
+        nativeFrames++;
+        document.body.dataset.babylonNativeFrames = String(nativeFrames);
       });
 
       window.addEventListener("resize", () => {

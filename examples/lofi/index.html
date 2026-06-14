@@ -55,9 +55,19 @@
 
     const TRANSITION_DURATION_MS = 1500;
     const ADVANCE_INTERVAL_SEC = 12;
+    const queryParams = new URLSearchParams(window.location.search);
+    const useTestAssets = queryParams.get("testLofiAssets") === "1";
+    const worlds = useTestAssets
+      ? [
+        "../../test/fixtures/assets/butterfly.spz",
+        "../../test/fixtures/assets/cat.spz",
+      ]
+      : WORLDS;
 
-    shuffleArray(WORLDS);
-    shuffleArray(AUDIOS);
+    if (!useTestAssets) {
+      shuffleArray(WORLDS);
+      shuffleArray(AUDIOS);
+    }
 
     // A simple utility class for caching a fixed number of items
     class DataCache {
@@ -124,7 +134,9 @@
     const worldCache = new DataCache({
       maxItems: 10,
       asyncFetch: async (name) => {
-        const url = getWorldUrl(name);
+        const url = useTestAssets
+          ? new URL(name, window.location.href).href
+          : getWorldUrl(name);
         const packedSplats = new PackedSplats({ url });
         await packedSplats.initialized;
         return packedSplats;
@@ -133,6 +145,8 @@
         packedSplats.dispose();
       },
     });
+    document.body.dataset.lofiTestAssets = String(useTestAssets);
+    document.body.dataset.lofiWorlds = String(worlds.length);
 
     let audioIndex = 0;
     const audio = new Audio(getAudioUrl(AUDIOS[audioIndex]));
@@ -324,6 +338,10 @@
     let curWorld = null;
     let targetWorld = 0;
     let autoDir = 1;
+    let lofiFrames = 0;
+    let lofiPrefetches = 0;
+    let lofiTransitions = 0;
+    let lofiWorldApplies = 0;
 
     const transitionT = dyno.dynoFloat(0);
     const idleBeeTranslate = dyno.dynoFloat(0);
@@ -356,8 +374,8 @@
 
     function nextWorld(target, inc) {
       let nextTarget = target + inc;
-      if (nextTarget < 0) nextTarget = WORLDS.length - 1;
-      if (nextTarget >= WORLDS.length) nextTarget = 0;
+      if (nextTarget < 0) nextTarget = worlds.length - 1;
+      if (nextTarget >= worlds.length) nextTarget = 0;
       return nextTarget;
     }
 
@@ -366,18 +384,22 @@
       autoDir = inc;
       transitionTotal = 0;
 
-      console.log("Fetching targetWorld", WORLDS[targetWorld]);
-      await worldCache.getFetch(WORLDS[targetWorld]);
+      console.log("Fetching targetWorld", worlds[targetWorld]);
+      await worldCache.getFetch(worlds[targetWorld]);
+      lofiPrefetches += 1;
+      recordLofiState();
       console.log("Fetch complete");
     }
 
     async function advanceWorld() {
       targetWorld = nextWorld(targetWorld, autoDir);
-      await worldCache.getFetch(WORLDS[targetWorld]);
+      await worldCache.getFetch(worlds[targetWorld]);
+      lofiPrefetches += 1;
+      recordLofiState();
     }
 
     // Initiated prefetch of first world
-    await worldCache.getFetch(WORLDS[targetWorld]);
+    await worldCache.getFetch(worlds[targetWorld]);
 
     const world = new SplatMesh();
     world.quaternion.set(1, 0, 0, 0);
@@ -412,6 +434,62 @@
         return { gsplat: modifier.outputs.gsplat };
       },
     );
+
+    function recordLofiState() {
+      document.body.dataset.lofiReady = String(curWorld != null && !!world.packedSplats);
+      document.body.dataset.lofiWorlds = String(worlds.length);
+      document.body.dataset.lofiCurrentWorld = curWorld == null ? "" : worlds[curWorld];
+      document.body.dataset.lofiTargetWorld = worlds[targetWorld] ?? "";
+      document.body.dataset.lofiCachedWorlds = String(worldCache.items.length);
+      document.body.dataset.lofiSplats = String(world.numSplats ?? world.packedSplats?.numSplats ?? 0);
+      document.body.dataset.lofiFrames = String(lofiFrames);
+      document.body.dataset.lofiPrefetches = String(lofiPrefetches);
+      document.body.dataset.lofiTransitions = String(lofiTransitions);
+      document.body.dataset.lofiWorldApplies = String(lofiWorldApplies);
+      document.body.dataset.lofiRustle = rustleBlend.value.toFixed(3);
+      document.body.dataset.lofiSnowOpacity = String(snowBox.opacity.value);
+      document.body.dataset.lofiTestAssets = String(useTestAssets);
+    }
+
+    function applyTargetWorldNow() {
+      const next = worldCache.getImmediate(worlds[targetWorld]);
+      if (!next) {
+        throw new Error(`Target world is not cached: ${worlds[targetWorld]}`);
+      }
+      world.packedSplats = next;
+      world.objectModifier = undefined;
+      curWorld = targetWorld;
+      transitioning = null;
+      updateSceneEffect(worlds[curWorld]);
+      world.updateGenerator();
+      world.updateVersion();
+      lofiWorldApplies += 1;
+      recordLofiState();
+      return {
+        currentWorld: worlds[curWorld],
+        applies: lofiWorldApplies,
+        splats: world.numSplats ?? world.packedSplats?.numSplats ?? 0,
+      };
+    }
+
+    recordLofiState();
+
+    window.sparkLofi = {
+      async prefetchNext() {
+        await incWorld(1);
+        return {
+          cachedWorlds: worldCache.items.length,
+          targetWorld: worlds[targetWorld],
+        };
+      },
+      applyTargetWorldNow,
+      setRustle(value) {
+        rustleBlend.value = value;
+        world.updateVersion();
+        recordLofiState();
+        return rustleBlend.value;
+      },
+    };
 
     function updateSnowRain(snow, snowRain) {
       // Smoothly interpolate between snow and rain
@@ -788,6 +866,7 @@
 
     env.run((time, deltaTime, xrFrame) => {
       stats.begin();
+      lofiFrames += 1;
 
       if (xr) {
         xr.updateControllers(camera);
@@ -855,12 +934,14 @@
 
       const target = targetWorld;
       if (!transitioning && (curWorld !== target)) {
-        const next = worldCache.getImmediate(WORLDS[target]);
+        const next = worldCache.getImmediate(worlds[target]);
         if (next) {
           if (curWorld == null) {
             world.packedSplats = next;
             curWorld = target;
-            updateSceneEffect(WORLDS[curWorld]);
+            updateSceneEffect(worlds[curWorld]);
+            lofiWorldApplies += 1;
+            recordLofiState();
           } else {
             world.objectModifier = dyno.dynoBlock({ gsplat: dyno.Gsplat }, { gsplat: dyno.Gsplat }, ({ gsplat }) => {
               const { index } = dyno.splitGsplat(gsplat).outputs;
@@ -872,7 +953,9 @@
             transitionT.value = 0;
             idleBeeTranslate.value = isXrPresenting() ? idleBee.position.z : 0;
             world.updateGenerator();
-            updateSceneEffect(WORLDS[target]);
+            updateSceneEffect(worlds[target]);
+            lofiTransitions += 1;
+            recordLofiState();
 
             console.log("Starting transition");
             const start = performance.now();
@@ -888,12 +971,16 @@
                 world.objectModifier = undefined;
                 idleBee.position.z -= isXrPresenting() ? idleBeeTranslate.value : 0;
                 world.updateGenerator();
+                lofiWorldApplies += 1;
+                recordLofiState();
                 console.log("Transition complete");
 
                 const nextTarget = nextWorld(targetWorld, autoDir);
                 (async () => {
-                  console.log("Prefetching next world:", WORLDS[nextTarget]);
-                  await worldCache.getFetch(WORLDS[nextTarget]);
+                  console.log("Prefetching next world:", worlds[nextTarget]);
+                  await worldCache.getFetch(worlds[nextTarget]);
+                  lofiPrefetches += 1;
+                  recordLofiState();
                   console.log("Prefetch complete");
                 })();
               }
@@ -904,6 +991,9 @@
         }
       }
 
+      if (useTestAssets) {
+        recordLofiState();
+      }
       stats.end();
     });
   </script>

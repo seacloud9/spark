@@ -1,8 +1,12 @@
 # Render performance plan
 
-**Status:** survey + proposed plan. No optimization commits yet.
+**Status:** instrumentation shipped; benchmark harness added for feature-era measurements. Optimization work is intentionally deferred until the feature list is complete.
 
-This document captures (1) what render hot-paths look like today, (2) where the multi-backend rollout most likely introduced overhead vs the upstream `sparkjsdev/spark` master, (3) the missing perf-test infrastructure, and (4) a phased plan to measure, then fix.
+**2026-06-13 update:** feature-era smoke tests now avoid several remote/large assets by using explicit test-only fixture switches (`testFixtureAssets=1`, `testLofiAssets=1`, `testPainterAsset=cat.spz`) and a local viewer URL (`/test/fixtures/assets/robot-head.spz`). This is test determinism work, not Phase 3 optimization. The production/default examples still exercise their normal assets unless those query params are present.
+
+**2026-06-13 Phase 3 update:** the first targeted optimization shipped for `splat-painter`: drag-time full-mesh `RgbaArray.render()` calls are now coalesced through `requestAnimationFrame`, and the smoke test verifies a burst of pointer moves stays bounded to a small number of RGBA rebuilds. Larger structural Phase 3 items (shared GL context for Babylon texture mode, traversal folding) remain measurement-gated.
+
+This document captures (1) what render hot-paths look like today, (2) where the multi-backend rollout most likely introduced overhead vs the upstream `sparkjsdev/spark` master, (3) the perf benchmark infrastructure, and (4) a phased plan to measure now, then optimize after the feature surface settles.
 
 **This is fork-local work.** No optimization derived here will be sent upstream. We may *cherry-pick from* upstream into our fork, but we never push to it. The `upstream` git remote is configured fetch-only (`push = no_push`) as a safety measure.
 
@@ -90,6 +94,10 @@ In production this is masked because the browser coalesces `pointermove` events 
 
 **Surfaced by:** `splat-painter brush paints` interaction smoke needing a 600s test budget (vs 360s for the other Tier 7 smokes). Captured here so the perf plan covers it even before instrumentation lands.
 
+**2026-06-13 test-harness note:** the smoke now uses `testPainterAsset=cat.spz` and a single down/up gesture, so the Playwright budget is back to 300s and the suite no longer depends on the remote greyscale-bedroom asset. This does not remove the production hot path; it only keeps feature coverage deterministic while Phase 3 remains deferred.
+
+**2026-06-13 Phase 3 shipped:** mitigation path 1 is now implemented. `pointermove` and `pointerdown` call `requestRgbaUpdate()` instead of synchronously rebuilding RGBA. Repeated pointer events set a queued flag, and a single `requestAnimationFrame` callback performs the expensive `updateRgba()` pass. The smoke sends a same-tick burst of pointer moves and asserts `data-painter-rgba-updates <= 3`; observed result was 6 moves / 2 rebuilds on each backend.
+
 ### 2.8 Three-pass scene traversal in `collectThreeSparkScene` (still applies)
 
 See §2.2. The dual-spark fix in 2.6 doesn't change this — `collectThreeSparkScene` still walks the scene three times. With aframe now running 1 SparkRenderer instead of 2, the relative cost of the triple traversal grew (it's now a larger share of the per-frame budget).
@@ -146,23 +154,32 @@ All measurements come from `performance.now()`. Producers write the underlying i
 - [src/backends/babylon/SparkBabylonTextureBridge.ts](../src/backends/babylon/SparkBabylonTextureBridge.ts): wrapped `syncOnce()` body with `performance.now()` delta written to `sparkRenderer.lastBabylonReadbackMs`.
 - [src/index.ts](../src/index.ts): re-export `type SparkPerfMetrics` alongside `SparkRenderer` / `SparkRendererOptions`.
 
-### Phase 2 — perf-test infrastructure (≤ 4 hours)
+### Phase 2 — benchmark infrastructure — ✅ SHIPPED (benchmark-only)
 
-Today there are zero perf tests. Add a new test bucket [test/perf/](../test/perf/) (parallel to `test/e2e/`):
+Feature work remains the priority. Phase 2 exists to collect speed baselines while that work continues; it does **not** start optimization work and it does **not** add a default CI perf gate.
 
-1. **`test/perf/render-fps.spec.ts`** — Playwright-driven page that loads `test/fixtures/snapshot-{three,aframe,babylon}.html?scene=<scene>`, runs `requestAnimationFrame` for N frames (say 600 = 10 s @ 60 fps), records frame intervals + the new `perfMetrics`, asserts a budget:
-   - Three: ≤ 16.67 ms p50, ≤ 33 ms p99 on the parity matrix's hot scenes (`helloWorld`, `glsl`, `sogs`, `splatShaderEffects`).
-   - A-Frame: same budget (structural mock = same Three triple, should match).
-   - Babylon texture: ≤ 18 ms p50 (~10% slack for the per-frame readback).
-   - Babylon native: ≤ 16.67 ms p50 (no readback; same budget as Three).
+What landed:
 
-2. **`test/perf/memory-growth.spec.ts`** — capture `performance.measureUserAgentSpecificMemory()` (or `performance.memory.usedJSHeapSize` fallback) at frame 60 and frame 600. Assert delta is bounded — catches splat-buffer / packedData leaks.
+1. **`test/perf/render-fps.spec.ts`** — Playwright-driven benchmark that loads `test/fixtures/snapshot-{three,aframe,babylon}.html?scene=<scene>`, runs `requestAnimationFrame` for N frames (`SPARK_PERF_FRAMES`, default 600, after `SPARK_PERF_WARMUP_FRAMES`, default 60), and records frame intervals plus `SparkRenderer.perfMetrics` summaries (`min`, `p50`, `p95`, `p99`, `max`, `average`). Last-observed work-item metrics (`lastSortMs`, `lastAccumulateMs`, `lastTraverseMs`, `lastLodRaycastMs`, `lastBabylonReadbackMs`) summarize changed nonzero samples so stale values are not duplicated across every frame.
+   - Default hot scenes: `helloWorld`, `glsl`, `sogs`, `splatShaderEffects`.
+   - Default backends: `three`, `aframe`, `babylon-texture`, `babylon-native`.
+   - Narrow a run during development with `pnpm run test:perf:smoke` or direct env overrides such as `SPARK_PERF_SCENES=axes SPARK_PERF_BACKENDS=three SPARK_PERF_FRAMES=30 pnpm run test:perf`.
+   - Output report: `tmp/perf/render-fps.json`; reports and baselines include selected scenes/backends/frame counts/full-default metadata, and each test also prints a compact p50 / p95 terminal summary for quick triage.
 
-3. **`test/perf/regression-baseline.json`** — committed file storing the last-green run's per-scene per-backend p50/p99/memory deltas. CI re-runs and asserts within a tolerance band (say ±15% on time, ±20% on memory). When the band trips, the failure message points at the JSON line that needs updating after human review.
+2. **Fixture benchmark hook** — snapshot fixtures now expose `window.spark` and `window.sparkPerfBenchmark.renderFrame()` so perf tests can drive one backend-correct frame without duplicating setup.
 
-4. **`pnpm run test:perf`** — new script wraps `playwright test test/perf/`. Separate from `test:e2e` because perf runs are slow + flaky on shared CI runners and want their own retry/serialization policy.
+3. **`test/perf/regression-baseline.json`** — committed baseline container. It starts empty on purpose; populate it after a reviewed full local run with `SPARK_PERF_UPDATE_BASELINE=1 pnpm run test:perf`. Partial baseline writes are refused unless `SPARK_PERF_ALLOW_PARTIAL_BASELINE=1` is set.
 
-### Phase 3 — targeted optimizations (post-instrumentation, scope-dependent)
+4. **Soft baseline comparison** — default runs log baseline misses but do not fail. Turn failures on later with `SPARK_PERF_ASSERT_BASELINE=1` once feature work is done and runner variance is understood; assert mode also fails if a benchmark case has no committed baseline entry.
+
+5. **`pnpm run test:perf` / `pnpm run test:perf:smoke`** — separate Playwright config (`playwright.perf.config.ts`) with one worker and its own output directory, keeping slow/flaky benchmark runs separate from `test:e2e`. The smoke script exercises `axes` across all four backend modes with three measured frames.
+
+Deferred from the original Phase 2 scope:
+
+- **Memory-growth spec** — still useful, but not needed for speed baselines. Add it after the feature list is complete or when a leak becomes suspected.
+- **Hard budgets** — intentionally deferred. The first stable budget should come from committed baseline data, not guessed p50 thresholds.
+
+### Phase 3 — targeted optimizations (started; remaining work measurement-gated)
 
 Each item below should be **measured first** via Phase 2 telemetry before implementation. The size of the win determines whether it's worth the complexity. Listed in priority order from "biggest expected win" to "speculative".
 
@@ -175,6 +192,8 @@ Each item below should be **measured first** via Phase 2 telemetry before implem
 4. **Profile `SplatAccumulator.update()` body** — there's a real chance the per-generator gen-pass dispatch in the accumulator dominates frame time on the multi-effect (5-variant shader bundle) scenes. Phase 1 metrics will tell.
 
 5. **Worker reuse + transfer-only ArrayBuffer messaging** for the sort step. The sort already runs in a `SplatWorker`. Confirm via Phase 1 telemetry that the worker-message overhead isn't a significant share of total sort time.
+
+6. **Splat painter drag coalescing** — ✅ SHIPPED 2026-06-13. This was called out in §2.7 as the lowest-risk mitigation for the production/full-asset painter hot path and the synthetic Playwright drag path. Remaining painter optimization ideas (incremental RGBA updates or pointerup-only bake) are deferred because the coalescing change removes the unbounded per-event rebuild without changing the visible brush semantics.
 
 ### Phase 4 — CI gating
 

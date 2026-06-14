@@ -150,6 +150,18 @@
         host.sparkRenderer.time = sceneCfg.time;
       }
 
+      window.spark = host.sparkRenderer;
+      window.sparkPerfBenchmark = {
+        backend: "babylon",
+        scene: sceneName,
+        mode,
+        async renderFrame() {
+          await host.renderOnce();
+          scene.render();
+          return host.sparkRenderer.perfMetrics;
+        },
+      };
+
       await scene.whenReadyAsync();
 
       let frames = 0;

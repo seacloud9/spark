@@ -191,6 +191,7 @@
     const sparkCanvasEl = document.querySelector(".spark-canvas");
     let fileName;
     let fileBytes;
+    let viewerLoadCount = 0;
 
     const env = await setupSparkExample({
       canvas: sparkCanvasEl,
@@ -254,9 +255,19 @@
     function setSplatFile(init) {
       if (loadedSplat) { env.scene.remove(loadedSplat); }
 
+      viewerLoadCount += 1;
+      document.body.dataset.viewerLoads = String(viewerLoadCount);
+      document.body.dataset.viewerReady = "loading";
+      document.body.dataset.viewerFileName =
+        init.fileName ?? init.url?.split("/").pop()?.split("?")[0] ?? "";
+
       loadedSplat = new SplatMesh(init);
       loadedSplat.quaternion.set(1, 0, 0, 0);
       env.add(loadedSplat);
+      loadedSplat.initialized.then(() => {
+        document.body.dataset.viewerReady = "true";
+        document.body.dataset.viewerSplats = String(loadedSplat.numSplats);
+      });
 
       document.querySelector('.container').classList.add('hidden');
       document.querySelector('.canvas-container').classList.remove('invisible');

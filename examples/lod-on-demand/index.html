@@ -53,8 +53,17 @@
     splats.position.set(0, -0.5, -2);
     splats.enableLod = false;
     env.add(splats);
+    splats.initialized.then(() => {
+      document.body.dataset.lodOnDemandReady = "true";
+      document.body.dataset.lodOnDemandSplats = String(splats.numSplats);
+    });
+
+    let colorChangeCount = 0;
+    let lodCreateCount = 0;
 
     function newColors() {
+      colorChangeCount += 1;
+      document.body.dataset.lodOnDemandColorChanges = String(colorChangeCount);
       const modulate = new THREE.Color(Math.random(), Math.random(), Math.random());
       const array = new Uint8ClampedArray(splats.packedSplats.numSplats * 4);
       splats.forEachSplat((index, center, scales, quaternion, opacity, color) => {
@@ -71,11 +80,19 @@
     async function createLod() {
       const overlay = document.getElementById("overlay");
       if (overlay.style.display) return;
+      lodCreateCount += 1;
+      document.body.dataset.lodOnDemandCreates = String(lodCreateCount);
+      document.body.dataset.lodOnDemandState = "creating";
       overlay.style.display = "block";
       await splats.createLodSplats({ quality: false, rgbaArray: splats.splatRgba });
       overlay.style.display = "";
       splats.enableLod = true;
+      document.body.dataset.lodOnDemandState = "ready";
+      document.body.dataset.lodOnDemandEnabled = String(splats.enableLod);
+      document.body.dataset.lodOnDemandHasTree = String(Boolean(splats.splats.lodSplats));
     }
+
+    window.sparkLodOnDemand = { newColors, createLod };
 
     const gui = new GUI({ title: "Settings" });
     const buttons = { newColors, createLod };

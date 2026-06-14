@@ -36,6 +36,9 @@
     import { setupSparkExample } from "../js/spark-engine.js";
 
     const RENDER_TIMEOUT_MS = 120 * 1000;
+    const queryParams = new URLSearchParams(window.location.search);
+    const useTestAssets = queryParams.get("testPortalAssets") === "1";
+    const useStaticPortalTest = queryParams.get("testStaticPortal") === "1";
 
     const stats = new Stats();
     document.body.appendChild(stats.dom);
@@ -47,7 +50,7 @@
         "quaternion": [1, 0, 0, 0],
       },
       "cat": {
-        "asset": "cat.spz",
+        "asset": useTestAssets ? "butterfly.spz" : "cat.spz",
         "position": [-3, -0.7, -4.5],
         "quaternion": [1,0,0,0],
         "scale": 0.8,
@@ -290,6 +293,24 @@
     let lastDir = new THREE.Vector3();
 
     let animations = [];
+    const universeMeshes = [];
+    let portalFrameCount = 0;
+    let portalPassCount = 0;
+    let portalTeleports = 0;
+    let lastPortalChoice = "";
+
+    function recordPortalState() {
+      document.body.dataset.portalReady = String(universeMeshes.length === Object.keys(universe).length);
+      document.body.dataset.portalMeshes = String(universeMeshes.length);
+      document.body.dataset.portalSplats = String(universeMeshes.reduce((sum, mesh) => sum + (mesh.numSplats ?? 0), 0));
+      document.body.dataset.portalFrames = String(portalFrameCount);
+      document.body.dataset.portalPasses = String(portalPassCount);
+      document.body.dataset.portalTeleports = String(portalTeleports);
+      document.body.dataset.portalLastChoice = lastPortalChoice;
+      document.body.dataset.portalRenderEnabled = String(renderEnabled);
+      document.body.dataset.portalLocalFrame = localFrame.position.toArray().map((value) => value.toFixed(3)).join(",");
+      document.body.dataset.portalDiskRadius = String(spark.uniforms.diskRadius.value);
+    }
 
     async function loadUniverse() {
       for (const key of Object.keys(universe)) {
@@ -308,6 +329,7 @@
 
         mesh.opacity = 0;
         scene.add(mesh);
+        universeMeshes.push(mesh);
 
         animations.push({
           start: performance.now(),
@@ -321,9 +343,35 @@
           },
         });
       }
+      recordPortalState();
     }
 
     await loadUniverse();
+    window.sparkPortal = {
+      renderOnce() {
+        portalFrameCount += 1;
+        portal1.updateMatrixWorld(true);
+        portal2.updateMatrixWorld(true);
+        camera.updateMatrixWorld(true);
+        camera2.updateMatrixWorld(true);
+        renderPortalPass();
+        recordPortalState();
+        return {
+          choice: lastPortalChoice,
+          passes: portalPassCount,
+        };
+      },
+      forcePortalTeleport() {
+        teleportCameraThroughPortal(portal1to2());
+        portalTeleports += 1;
+        camera.getWorldPosition(lastCameraWorld);
+        recordPortalState();
+        return {
+          localFrame: localFrame.position.toArray(),
+          teleports: portalTeleports,
+        };
+      },
+    };
 
     const controls = new SparkControls({
       renderer,
@@ -378,7 +426,63 @@
       }
     });
 
-    env.runManual((time, deltaTime) => {
+    function renderPortalPass() {
+      const cameraWorld = camera.getWorldPosition(new THREE.Vector3());
+      const viewDir = camera.getWorldDirection(new THREE.Vector3()); // normalized
+
+      const portal1Center = portal1.getWorldPosition(new THREE.Vector3());
+      const portal2Center = portal2.getWorldPosition(new THREE.Vector3());
+
+      const toPortal1 = portal1Center.clone().sub(cameraWorld);
+      const toPortal2 = portal2Center.clone().sub(cameraWorld);
+      const portal1Dist = toPortal1.length();
+      const portal2Dist = toPortal2.length();
+      const portal1ViewDot = toPortal1.clone().normalize().dot(viewDir); // 0 == dead center
+      const portal2ViewDot = toPortal2.clone().normalize().dot(viewDir);
+
+      const usePortal1 =
+        ((portal1ViewDot / portal1Dist) > (portal2ViewDot / portal2Dist)) ? true : false;
+      lastPortalChoice = usePortal1 ? "portal1" : "portal2";
+
+      // Keep the existing convention: portals[1] is the "primary" (closest-to-view) portal.
+      const portals = usePortal1 ? [portal2, portal1] : [portal1, portal2];
+
+      const camera2Matrix = usePortal1 ?
+        camera.matrixWorld.clone().premultiply(portal1to2()) :
+        camera.matrixWorld.clone().premultiply(portal2to1());
+      camera2Matrix.decompose(camera2.position, camera2.quaternion, camera2.scale);
+
+      // IMPORTANT: `spark2.render()` sets a global override, but the mesh that actually
+      // gets drawn (and thus whose uniforms are used) is still `spark`.
+      //
+      // Pass 1: render the "behind the portal" view from camera2, clipped by portal2 disk.
+      camera2.updateMatrixWorld(true); // camera2 is parented to scene, so local == world
+      setPortalDiskUniforms({
+        spark,
+        camera: camera2,
+        portal: portals[0],
+        radius: 1,
+        twoSided: true,
+      });
+      renderer.autoClear = true;
+      spark2.render(scene, camera2);
+      portalPassCount += 1;
+
+      // Pass 2: render the main view from camera, clipped by portal1 disk.
+      setPortalDiskUniforms({
+        spark,
+        camera,
+        portal: portals[1],
+        radius: -1,
+        twoSided: true,
+      });
+      renderer.autoClear = false;
+      renderer.render(scene, camera);
+      portalPassCount += 1;
+    }
+
+    if (!useStaticPortalTest) env.runManual((time, deltaTime) => {
+      portalFrameCount += 1;
       stats.begin();
 
       controls.update(localFrame);
@@ -436,58 +540,9 @@
         return keep;
       });
 
-      if (renderEnabled) {
-        const cameraWorld = camera.getWorldPosition(new THREE.Vector3());
-        const viewDir = camera.getWorldDirection(new THREE.Vector3()); // normalized
+      if (renderEnabled) renderPortalPass();
 
-        const portal1Center = portal1.getWorldPosition(new THREE.Vector3());
-        const portal2Center = portal2.getWorldPosition(new THREE.Vector3());
-
-        const toPortal1 = portal1Center.clone().sub(cameraWorld);
-        const toPortal2 = portal2Center.clone().sub(cameraWorld);
-        const portal1Dist = toPortal1.length();
-        const portal2Dist = toPortal2.length();
-        const portal1ViewDot = toPortal1.clone().normalize().dot(viewDir); // 0 == dead center
-        const portal2ViewDot = toPortal2.clone().normalize().dot(viewDir);
-
-        const usePortal1 =
-          ((portal1ViewDot / portal1Dist) > (portal2ViewDot / portal2Dist)) ? true : false;
-
-        // Keep the existing convention: portals[1] is the "primary" (closest-to-view) portal.
-        const portals = usePortal1 ? [portal2, portal1] : [portal1, portal2];
-
-        const camera2Matrix = usePortal1 ?
-          camera.matrixWorld.clone().premultiply(portal1to2()) :
-          camera.matrixWorld.clone().premultiply(portal2to1());
-        camera2Matrix.decompose(camera2.position, camera2.quaternion, camera2.scale);
-
-        // IMPORTANT: `spark2.render()` sets a global override, but the mesh that actually
-        // gets drawn (and thus whose uniforms are used) is still `spark`.
-        //
-        // Pass 1: render the "behind the portal" view from camera2, clipped by portal2 disk.
-        camera2.updateMatrixWorld(true); // camera2 is parented to scene, so local == world
-        setPortalDiskUniforms({
-          spark,
-          camera: camera2,
-          portal: portals[0],
-          radius: 1,
-          twoSided: true,
-        });
-        renderer.autoClear = true;
-        spark2.render(scene, camera2);
-
-        // Pass 2: render the main view from camera, clipped by portal1 disk.
-        setPortalDiskUniforms({
-          spark,
-          camera,
-          portal: portals[1],
-          radius: -1,
-          twoSided: true,
-        });
-        renderer.autoClear = false;
-        renderer.render(scene, camera);
-      }
-
+      recordPortalState();
       stats.end();
     });
   </script>

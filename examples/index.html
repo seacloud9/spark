@@ -119,7 +119,7 @@
       <h1>Spark · Examples</h1>
       <p class="subtitle">
         Every example shipped with Spark, with one-click links to run it
-        through the Three.js, A-Frame, or BabylonJS backend.
+        through each supported host/backend.
       </p>
 
       <div class="legend">
@@ -130,8 +130,8 @@
             >○</strong
           >
           <em>exception/showcase:</em> either a headset-only XR/editor
-          surface that is intentionally outside the backend smoke gate, or
-          a Babylon host reference page that is already Babylon-specific. See
+          surface that is still Three-hosted, or a Babylon host reference
+          page that already demonstrates the Babylon-specific equivalent. See
           <a href="../src/backends/README.md">src/backends/README.md</a>
           and
           <a href="../MULTI-BACKEND-PARITY-PLAN.md"
@@ -706,13 +706,12 @@
           </tr>
           <tr>
             <td class="name">editor</td>
-            <td class="desc">Full splat editor UI.</td>
+            <td class="desc">
+              Full splat editor UI; Three-hosted while the backend gate
+              focuses on renderer/runtime parity.
+            </td>
             <td class="engines">
               <a class="three" href="./editor/">three</a>
-              <a class="aframe" href="./editor/?engine=aframe">aframe</a>
-              <a class="babylon" href="./editor/?engine=babylon"
-                >babylon</a
-              >
             </td>
           </tr>
         </tbody>
@@ -723,26 +722,22 @@
         <tbody>
           <tr>
             <td class="name">basic-xr</td>
-            <td class="desc">Minimal WebXR session entry.</td>
+            <td class="desc">
+              Minimal Three/WebXR session entry; XR host parity is handled
+              separately from the desktop backend smoke gate.
+            </td>
             <td class="engines">
               <a class="three" href="./basic-xr/">three</a>
-              <a class="aframe" href="./basic-xr/?engine=aframe"
-                >aframe</a
-              >
-              <a class="babylon" href="./basic-xr/?engine=babylon"
-                >babylon</a
-              >
             </td>
           </tr>
           <tr>
             <td class="name">webxr</td>
-            <td class="desc">Full WebXR with hand tracking.</td>
+            <td class="desc">
+              Full Three/WebXR with hand tracking; headset session behavior
+              is not engine-switched on the examples index.
+            </td>
             <td class="engines">
               <a class="three" href="./webxr/">three</a>
-              <a class="aframe" href="./webxr/?engine=aframe">aframe</a>
-              <a class="babylon" href="./webxr/?engine=babylon"
-                >babylon</a
-              >
             </td>
           </tr>
         </tbody>

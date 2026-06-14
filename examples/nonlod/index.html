@@ -69,11 +69,16 @@
     }
 
     const url = await getAssetFileURL("butterfly-ai.spz");
-    makeButterfly(url, [-1, 0, -1.5], { lod: false });
-    makeButterfly(url, [1, 0, -1.5], { lod: true });
+    const rawMesh = makeButterfly(url, [-1, 0, -1.5], { lod: false });
+    const lodMesh = makeButterfly(url, [1, 0, -1.5], { lod: true });
 
     const nonLod = makeButterfly(url, [0, 0, -1.5], { lod: true, nonLod: true });
     nonLod.enableLod = true;
+    await Promise.all([
+      rawMesh.initialized,
+      lodMesh.initialized,
+      nonLod.initialized,
+    ]);
 
     const gui = new GUI({ title: "Settings" });
     gui.add(nonLod, "enableLod").name("Enable LoD for non-LoD").onChange(updateAllSplats);
@@ -81,8 +86,50 @@
     gui.add(splatColoring, "value").name("Splat index coloring").onChange(updateAllSplats);
 
     const controls = new SparkControls({ canvas: env.renderer.domElement });
+    let frameCount = 0;
+    let updates = 0;
+
+    function recordNonLodState() {
+      document.body.dataset.nonlodReady = "true";
+      document.body.dataset.nonlodMeshes = String(allSplats.length);
+      document.body.dataset.nonlodRawLod = String(rawMesh.enableLod);
+      document.body.dataset.nonlodLodEnabled = String(lodMesh.enableLod);
+      document.body.dataset.nonlodToggleEnabled = String(nonLod.enableLod);
+      document.body.dataset.nonlodColoring = String(splatColoring.value);
+      document.body.dataset.nonlodLodSplatCount = String(env.spark.lodSplatCount);
+      document.body.dataset.nonlodSplats = String(nonLod.numSplats);
+      document.body.dataset.nonlodFrames = String(frameCount);
+      document.body.dataset.nonlodUpdates = String(updates);
+    }
+
+    recordNonLodState();
+
+    window.sparkNonLod = {
+      setParams(params) {
+        if (params.enableLod != null) {
+          nonLod.enableLod = params.enableLod;
+        }
+        if (params.splatColoring != null) {
+          splatColoring.value = params.splatColoring;
+        }
+        if (params.lodSplatCount != null) {
+          env.spark.lodSplatCount = params.lodSplatCount;
+        }
+        updateAllSplats();
+        updates += 1;
+        recordNonLodState();
+        return {
+          coloring: splatColoring.value,
+          enableLod: nonLod.enableLod,
+          lodSplatCount: env.spark.lodSplatCount,
+          updates,
+        };
+      },
+    };
 
     env.run(() => {
+      frameCount += 1;
+      recordNonLodState();
       controls.update(env.camera);
     });
   </script>

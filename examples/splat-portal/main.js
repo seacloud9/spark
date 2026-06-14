@@ -251,15 +251,22 @@ function transformPoseThroughPortal(sourcePortal, targetPortal, object3D) {
 }
 
 async function run() {
+  const queryParams = new URLSearchParams(window.location.search);
+  const useTestAssets = queryParams.get("testPortalAssets") === "1";
+
   // Load valley (world A)
-  const valleyURL = await getAssetFileURL("valley.spz");
+  const valleyURL = await getAssetFileURL(
+    useTestAssets ? "butterfly.spz" : "valley.spz",
+  );
   const valley = new SplatMesh({ url: valleyURL });
   await valley.initialized;
   valley.rotateX(Math.PI);
   sceneA.add(valley);
 
   // Load sutro (world B)
-  const sutroURL = await getAssetFileURL("sutro.zip");
+  const sutroURL = await getAssetFileURL(
+    useTestAssets ? "cat.spz" : "sutro.zip",
+  );
   const sutro = new SplatMesh({ url: sutroURL });
   await sutro.initialized;
   sutro.rotateX(Math.PI); // Fix orientation
@@ -290,6 +297,9 @@ async function run() {
   let activeWorld = "A";
   let lastPortalSide = -1; // -1 = behind portal, 1 = in front
   let teleportCooldown = 0;
+  let teleportCount = 0;
+  let frameCount = 0;
+  let targetRenderCount = 0;
   const TELEPORT_COOLDOWN_MS = 500; // 500ms cooldown
   const CROSSING_THRESHOLD = 0.3; // Distance threshold for crossing detection
 
@@ -306,7 +316,35 @@ async function run() {
     return d <= radius;
   }
 
+  function recordSplatPortalState() {
+    document.body.dataset.splatPortalActiveWorld = activeWorld;
+    document.body.dataset.splatPortalTeleports = String(teleportCount);
+    document.body.dataset.splatPortalFrames = String(frameCount);
+    document.body.dataset.splatPortalTargetRenders = String(targetRenderCount);
+    document.body.dataset.splatPortalTarget = `${rtAtoB.width}x${rtAtoB.height}`;
+  }
+
+  document.body.dataset.splatPortalReady = "true";
+  document.body.dataset.splatPortalValleySplats = String(valley.numSplats);
+  document.body.dataset.splatPortalSutroSplats = String(sutro.numSplats);
+  recordSplatPortalState();
+
+  window.sparkSplatPortal = {
+    forceTeleport() {
+      const src = activeWorld === "A" ? portalA : portalB;
+      const dst = activeWorld === "A" ? portalB : portalA;
+      transformPoseThroughPortal(src, dst, camera);
+      camera.updateMatrixWorld(true);
+      activeWorld = activeWorld === "A" ? "B" : "A";
+      teleportCount += 1;
+      teleportCooldown = TELEPORT_COOLDOWN_MS;
+      recordSplatPortalState();
+      return { activeWorld, teleports: teleportCount };
+    },
+  };
+
   env.runManual((timeMs) => {
+    frameCount += 1;
     // Decrease cooldown timer
     if (teleportCooldown > 0) {
       teleportCooldown -= 16; // assuming ~60fps
@@ -341,6 +379,7 @@ async function run() {
     renderer.clear(true, true, true);
     renderer.render(sceneA, camBtoA);
     renderer.setRenderTarget(null);
+    targetRenderCount += 2;
 
     portalA.visible = prevAVisible;
     portalB.visible = prevBVisible;
@@ -388,6 +427,7 @@ async function run() {
         camera.position.add(forward);
         camera.updateMatrixWorld(true);
         activeWorld = activeWorld === "A" ? "B" : "A";
+        teleportCount += 1;
         teleportCooldown = TELEPORT_COOLDOWN_MS;
         lastPortalSide = currentSide; // Update side tracking
       } else {
@@ -401,6 +441,7 @@ async function run() {
     } else {
       renderer.render(sceneB, camera);
     }
+    recordSplatPortalState();
   });
 }
 

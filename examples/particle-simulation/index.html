@@ -83,16 +83,26 @@
       ),
     );
 
+    const testSnowSplats = Number(
+      new URLSearchParams(window.location.search).get("testSnowSplats"),
+    );
     const snow = generators.snowBox({
       ...generators.DEFAULT_SNOW,
       box: snowVolumeBox.clone(),
       minY: SCENE_CONFIG.SNOW_MIN_Y,
+      numSplats:
+        Number.isFinite(testSnowSplats) && testSnowSplats > 0
+          ? Math.floor(testSnowSplats)
+          : undefined,
       color1: new THREE.Color(1.0, 1.0, 1.0),
       color2: new THREE.Color(0.91, 0.9, 0.97),
       density: 1000,
       maxScale: 0.01,
     });
     env.add(snow.snow);
+    document.body.dataset.particleSimulationReady = "true";
+    document.body.dataset.particleSimulationSplats = String(snow.snow.numSplats);
+    let particleSimulationFrames = 0;
 
     const gui = new GUI({ title: "Snow Particle Simulation" });
     const params = {
@@ -113,6 +123,52 @@
       _previousWanderVariance: generators.DEFAULT_SNOW.wanderVariance,
     };
 
+    function setPaused(value) {
+      params.isPaused = value;
+      if (value) {
+        params._previousFallVelocity = params.fallVelocity;
+        params._previousWanderScale = params.wanderScale;
+        params._previousWanderVariance = params.wanderVariance;
+
+        snow.fallVelocity.value = 0;
+        snow.wanderScale.value = 0;
+        snow.wanderVariance.value = 0;
+      } else {
+        snow.fallVelocity.value = params._previousFallVelocity;
+        snow.wanderScale.value = params._previousWanderScale;
+        snow.wanderVariance.value = params._previousWanderVariance;
+      }
+      document.body.dataset.particleSimulationPaused = String(params.isPaused);
+      document.body.dataset.particleSimulationFallVelocity = String(snow.fallVelocity.value);
+    }
+
+    function setWindDirection(value) {
+      const directions = {
+        N: new THREE.Vector3(0, -1, -1),
+        NE: new THREE.Vector3(1, -1, -1),
+        E: new THREE.Vector3(1, -1, 0),
+        SE: new THREE.Vector3(1, -1, 1),
+        "No Direction": new THREE.Vector3(0, -1, 0),
+        S: new THREE.Vector3(0, -1, 1),
+        SW: new THREE.Vector3(-1, -1, 1),
+        W: new THREE.Vector3(-1, -1, 0),
+        NW: new THREE.Vector3(-1, -1, -1),
+      };
+      params.windDirection = value;
+      params.fallDirection.copy(directions[value]).normalize();
+      snow.fallDirection.value.copy(params.fallDirection);
+      document.body.dataset.particleSimulationWind = value;
+      document.body.dataset.particleSimulationDirection = [
+        snow.fallDirection.value.x.toFixed(3),
+        snow.fallDirection.value.y.toFixed(3),
+        snow.fallDirection.value.z.toFixed(3),
+      ].join(",");
+    }
+
+    setPaused(params.isPaused);
+    setWindDirection(params.windDirection);
+    window.sparkParticleSimulation = { setPaused, setWindDirection };
+
     // snow parameter controls
     gui.add(params, "fallVelocity", 0.01, 0.5, 0.01).name("Fall Velocity");
     gui.add(params, "wanderScale", 0.01, 1, 0.01).name("Wander Scale");
@@ -121,21 +177,7 @@
     gui
       .add(params, "isPaused")
       .name("Pause Snowfall")
-      .onChange((value) => {
-        if (value) {
-          params._previousFallVelocity = params.fallVelocity;
-          params._previousWanderScale = params.wanderScale;
-          params._previousWanderVariance = params.wanderVariance;
-
-          snow.fallVelocity.value = 0;
-          snow.wanderScale.value = 0;
-          snow.wanderVariance.value = 0;
-        } else {
-          snow.fallVelocity.value = params._previousFallVelocity;
-          snow.wanderScale.value = params._previousWanderScale;
-          snow.wanderVariance.value = params._previousWanderVariance;
-        }
-      });
+      .onChange(setPaused);
 
     // color
     const colorFolder = gui.addFolder("Snow Colors");
@@ -182,24 +224,12 @@
         "W",
         "NW",
       ])
-      .onChange((value) => {
-        const directions = {
-          N: new THREE.Vector3(0, -1, -1),
-          NE: new THREE.Vector3(1, -1, -1),
-          E: new THREE.Vector3(1, -1, 0),
-          SE: new THREE.Vector3(1, -1, 1),
-          "No Direction": new THREE.Vector3(0, -1, 0),
-          S: new THREE.Vector3(0, -1, 1),
-          SW: new THREE.Vector3(-1, -1, 1),
-          W: new THREE.Vector3(-1, -1, 0),
-          NW: new THREE.Vector3(-1, -1, -1),
-        };
-        params.fallDirection.copy(directions[value]).normalize();
-        snow.fallDirection.value.copy(params.fallDirection);
-      })
+      .onChange(setWindDirection)
       .name("Wind Direction");
 
     env.run((time, dtMs) => {
+      particleSimulationFrames += 1;
+      document.body.dataset.particleSimulationFrames = String(particleSimulationFrames);
       const t = time * 0.001;
       const dt = dtMs * 0.001;
 

@@ -40,11 +40,14 @@
     const env = await setupSparkExample({
       cameraConfig: { fov: 75, position: [0, 0, 0], lookAt: [0, 0, -1] },
     });
+    const queryParams = new URLSearchParams(window.location.search);
+    const pyramidSplatCount = Number(queryParams.get("testPyramidSplats") ?? 500000);
+    const starSplatCount = Number(queryParams.get("testStarSplats") ?? 100000);
 
     // Generate a Sierpinski pyramid one splat at a time via iteration
     const pyramid = new SplatMesh({
       constructSplats: (splats) => {
-        const NUM_SPLATS = 500000;
+        const NUM_SPLATS = pyramidSplatCount;
         const ITERATIONS = 15;
         const CORNERS = [
           new THREE.Vector3(0, 1, -0.7),
@@ -75,7 +78,7 @@
 
     const stars = new SplatMesh({
       constructSplats: (splats) => {
-        const NUM_SPLATS = 100000;
+        const NUM_SPLATS = starSplatCount;
 
         const center = new THREE.Vector3();
         const scales = new THREE.Vector3().setScalar(0.008);
@@ -122,15 +125,33 @@
     image.scale.setScalar(0.7 / 400);
     image.position.set(-0.5, -1, -2);
     env.add(image);
+    await Promise.all([
+      pyramid.initialized,
+      stars.initialized,
+      text.initialized,
+      text2.initialized,
+      image.initialized,
+    ]);
+    document.body.dataset.proceduralSplatsReady = "true";
+    document.body.dataset.proceduralSplatsPyramid = String(pyramid.numSplats);
+    document.body.dataset.proceduralSplatsStars = String(stars.numSplats);
+    document.body.dataset.proceduralSplatsText = String(text.parent === env.scene);
+    document.body.dataset.proceduralSplatsText2 = String(text2.parent === env.scene);
+    document.body.dataset.proceduralSplatsImage = String(image.numSplats);
+    let frameCount = 0;
 
     const controls = new SparkControls({ canvas: env.renderer.domElement });
 
     env.run((time) => {
+      frameCount += 1;
+      document.body.dataset.proceduralSplatsFrames = String(frameCount);
       controls.update(env.camera);
 
       pyramid.rotation.y = time / 5000;
+      document.body.dataset.proceduralSplatsPyramidRotY = pyramid.rotation.y.toFixed(3);
 
       stars.position.z = Math.sin(time / 10000) * 10;
+      document.body.dataset.proceduralSplatsStarsZ = stars.position.z.toFixed(3);
 
       image.rotation.set(
         -0.3 + 0.35 * Math.sin(time / 190),
@@ -140,6 +161,7 @@
       image.position.y = -0.9 + 0.04 * Math.sin(time / 330);
 
       text2.opacity = Math.abs(Math.sin(time / 1000) * 0.3);
+      document.body.dataset.proceduralSplatsText2Opacity = text2.opacity.toFixed(3);
     });
   </script>
 </body>

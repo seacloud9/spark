@@ -87,15 +87,30 @@
       worldCenter: duck.position,
       hideObjects: [duck],
     });
+    let envMappedMaterials = 0;
     for (const obj of duck.children) {
       obj.material.envMap = envMap;
       obj.material.metalness = 1.0;
       obj.material.roughness = 0.02;
+      if (obj.material.envMap) {
+        envMappedMaterials += 1;
+      }
     }
+    let frameCount = 0;
 
     env.run((_time, deltaTime) => {
+      frameCount += 1;
+      document.body.dataset.envmapFrames = String(frameCount);
       duck.rotation.y += deltaTime / 2500;
     });
+
+    function recordDuckMaterialState(mode) {
+      document.body.dataset.envmapMode = mode;
+      document.body.dataset.envmapDuckChildren = String(duck.children.length);
+      document.body.dataset.envmapMaterials = String(envMappedMaterials);
+      document.body.dataset.envmapMetalness = String(duck.children[0]?.material?.metalness ?? "none");
+      document.body.dataset.envmapRoughness = String(duck.children[0]?.material?.roughness ?? "none");
+    }
 
     window.toggleMetal = function toggleMetal(el) {
       const metal = el.checked;
@@ -103,6 +118,22 @@
         obj.material.metalness = metal ? 0.0 : 1.0;
         obj.material.roughness = metal ? 0.2 : 0.02;
       }
+      recordDuckMaterialState(metal ? "plastic" : "metal");
+    };
+
+    document.body.dataset.envmapReady = "true";
+    document.body.dataset.envmapSplats = String(background.numSplats);
+    recordDuckMaterialState("metal");
+
+    window.sparkEnvMap = {
+      setPlastic(plastic) {
+        window.toggleMetal({ checked: plastic });
+        return {
+          metalness: duck.children[0]?.material?.metalness ?? null,
+          mode: document.body.dataset.envmapMode,
+          roughness: duck.children[0]?.material?.roughness ?? null,
+        };
+      },
     };
   </script>
 </body>

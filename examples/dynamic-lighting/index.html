@@ -101,11 +101,14 @@
     fireplace.quaternion.set(1, 0, 0, 0);
     fireplace.position.set(0, -1, -10);
     env.add(fireplace);
+    await fireplace.initialized;
+    document.body.dataset.dynamicLightingSplats = String(fireplace.numSplats);
 
     const fpsMovement = new FpsMovement({ moveSpeed: 2 });
     const pointerControls = new PointerControls({ canvas });
 
     let night = true;
+    let frameCount = 0;
     const lights = [];
     const helpers = [];
 
@@ -156,8 +159,39 @@
     createLight(lightingLayer, new THREE.Vector3(0.3, -1.1, -10.6), new THREE.Color(1, 0.95, 0.2), 1.6, 0);
     createLight(ambientLayer, new THREE.Vector3(0, 1, -11), new THREE.Color(1, 0.8, 0.6), 6, 0.8);
 
+    const debugCheckbox = document.getElementById("debug");
+    const daynightCheckbox = document.getElementById("daynight");
+
+    function setDebugHelpers(visible) {
+      debugCheckbox.checked = visible;
+      for (const helper of helpers) {
+        helper.visible = visible;
+      }
+      document.body.dataset.dynamicLightingDebug = String(visible);
+      document.body.dataset.dynamicLightingHelpersVisible = String(helpers.filter((helper) => helper.visible).length);
+    }
+
+    function setLighting(enabled) {
+      daynightCheckbox.checked = enabled;
+      night = enabled;
+      document.body.dataset.dynamicLightingEnabled = String(night);
+    }
+
+    document.body.dataset.dynamicLightingReady = "true";
+    document.body.dataset.dynamicLightingLights = String(lights.length);
+    document.body.dataset.dynamicLightingHelpers = String(helpers.length);
+    setDebugHelpers(false);
+    setLighting(true);
+
+    window.sparkDynamicLighting = {
+      setDebug: setDebugHelpers,
+      setLighting,
+    };
+
     let lastTime;
     env.run((time) => {
+      frameCount += 1;
+      document.body.dataset.dynamicLightingFrames = String(frameCount);
       const timeSeconds = time * 0.0005;
       const deltaTime = timeSeconds - (lastTime ?? timeSeconds);
       lastTime = timeSeconds;
@@ -183,16 +217,15 @@
 
       lights[lights.length - 1].visible = night;
       lights[lights.length - 1].color.setHSL(baseHue, 0.5, combinedFlicker);
+      document.body.dataset.dynamicLightingNightVisible = String(lights.filter((light) => light.visible).length);
+      document.body.dataset.dynamicLightingFlicker = combinedFlicker.toFixed(4);
     });
 
-    document.getElementById('debug').addEventListener('change', (ev) => {
-      const visible = ev.target.checked;
-      for (const helper of helpers) {
-        helper.visible = visible;
-      }
+    debugCheckbox.addEventListener('change', (ev) => {
+      setDebugHelpers(ev.target.checked);
     });
-    document.getElementById('daynight').addEventListener('change', () => {
-      night = !night;
+    daynightCheckbox.addEventListener('change', (ev) => {
+      setLighting(ev.target.checked);
     });
   </script>
 </body>

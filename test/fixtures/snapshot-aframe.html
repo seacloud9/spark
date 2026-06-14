@@ -111,6 +111,16 @@
       if (typeof sceneCfg.time === "number") {
         spark.time = sceneCfg.time;
       }
+      window.spark = spark;
+      window.sparkPerfBenchmark = {
+        backend: "aframe",
+        scene: sceneName,
+        async renderFrame() {
+          renderer.render(scene, camera);
+          return spark.perfMetrics;
+        },
+      };
+
       await spark.update({ scene, camera });
       renderer.render(scene, camera);
       await new Promise((resolve) => requestAnimationFrame(resolve));

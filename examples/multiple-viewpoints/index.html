@@ -45,12 +45,17 @@
     const camera = env.camera;
     const renderer = env.renderer;
     scene.background = new THREE.Color(0x000000);
+    let viewpointFrameCount = 0;
+    let viewpointRenderCount = 0;
+    let viewpointSliderCount = 0;
 
     const splatURL = await getAssetFileURL("butterfly.spz");
     const butterfly = new SplatMesh({ url: splatURL });
     butterfly.quaternion.set(1, 0, 0, 0);
     butterfly.position.set(0, 0, -3);
     env.add(butterfly);
+    await butterfly.initialized;
+    document.body.dataset.multipleViewpointsSplats = String(butterfly.numSplats);
 
     async function createViewpoint(origin, screenPos, index) {
       // Create a textured rectangle at the near plane to show the viewpoint
@@ -68,6 +73,18 @@
       const viewCamera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
       viewCamera.position.copy(origin);
       viewCamera.lookAt(butterfly.position);
+      let arrow = null;
+      function setViewCameraX(value) {
+        viewCamera.position.x = value / 100;
+        if (arrow) {
+          arrow.position.x = viewCamera.position.x;
+          arrow.lookAt(butterfly.position);
+        }
+        viewpointSliderCount += 1;
+        document.body.dataset.multipleViewpointsSliderUpdates = String(viewpointSliderCount);
+        document.body.dataset.multipleViewpointsLastSlider = `${index}:${value}`;
+        document.body.dataset.multipleViewpointsLastCameraX = viewCamera.position.x.toFixed(3);
+      }
 
       // Load arrow object to show where each camera is
       const arrowURL = await getAssetFileURL("arrow.glb");
@@ -80,7 +97,7 @@
           ][index]
         });
 
-        const arrow = gltf.scene.children[0];
+        arrow = gltf.scene.children[0];
         arrow.material = arrowMaterial;
         arrow.position.copy(viewCamera.position);
         arrow.lookAt(butterfly.position);
@@ -88,9 +105,7 @@
 
         // Connect slider to both camera and arrow
         document.getElementById("camera" + (index + 1)).oninput = ev => {
-          viewCamera.position.x = (ev.target.value / 100);
-          arrow.position.x = viewCamera.position.x;
-          arrow.lookAt(butterfly.position);
+          setViewCameraX(Number(ev.target.value));
         };
       });
 
@@ -101,10 +116,14 @@
         target: { width, height, doubleBuffer: true },
       });
       return {
+        setCameraX: setViewCameraX,
         update: () => {
           // Render the viewpoint to a texture and update the view screen
           viewRenderer.renderTarget({ scene, camera: viewCamera });
           screen.material.map = viewRenderer.target.texture;
+          viewpointRenderCount += 1;
+          document.body.dataset.multipleViewpointsRenders = String(viewpointRenderCount);
+          document.body.dataset.multipleViewpointsLastTarget = `${viewRenderer.target.width}x${viewRenderer.target.height}`;
         },
       };
     }
@@ -113,8 +132,19 @@
       await createViewpoint(new THREE.Vector3(0, 1.5, -3), new THREE.Vector2(-0.5, 0.5), 0),
       await createViewpoint(new THREE.Vector3(0.5, -1, -3), new THREE.Vector2(0.5, -0.5), 1),
     ];
+    document.body.dataset.multipleViewpointsReady = "true";
+    document.body.dataset.multipleViewpointsCount = String(viewpoints.length);
+    window.sparkMultipleViewpoints = {
+      setSlider(index, value) {
+        const viewpoint = viewpoints[index];
+        if (!viewpoint) throw new Error(`Unknown viewpoint index: ${index}`);
+        viewpoint.setCameraX(value);
+      },
+    };
 
     env.run((time, dtMs) => {
+      viewpointFrameCount += 1;
+      document.body.dataset.multipleViewpointsFrames = String(viewpointFrameCount);
       scene.background.set(0x000000);
       butterfly.rotation.y += dtMs / 2500;
 

@@ -3,6 +3,124 @@
 Date: 2026-06-11 (post engine-aware rollout push).
 Codex continuation update: 2026-06-12.
 Claude perf Phase 1 update: 2026-06-12.
+Codex feature-hardening update: 2026-06-13.
+
+## Codex continuation status (2026-06-13)
+
+Feature rollout is effectively in the hardening phase. No ordinary example remains to port. The remaining work before calling the feature phase complete is broader verification, docs cleanup, and keeping the test suite deterministic while avoiding the perf-optimization path until the feature surface settles.
+
+### What Codex added after Phase 2 perf infra
+
+- **Focused feature smokes now cover every engine-aware example class.** The multi-backend smoke file has targeted Three / A-Frame / Babylon probes for LoD, paging, offscreen targets, cube-depth readback, shader/dyno modifiers, raycasting, pointer interactions, painter brush mode, viewer URL loading, lofi world cycling, legacy portal, SparkPortals, and splat-portal render targets.
+- **`lofi` hardening:** `examples/lofi/index.html` gained `testLofiAssets=1`, which swaps the remote 500k world list for local `butterfly.spz` + `cat.spz` fixtures. `window.sparkLofi` exposes deterministic `prefetchNext()`, `applyTargetWorldNow()`, and `setRustle()` hooks so the smoke can validate cached world switching, splat counts, and shader-state updates without autoplay/audio/CDN timing.
+- **`splat-painter` hardening:** `examples/splat-painter/index.html` gained `testPainterAsset=cat.spz`, plus `data-painter-file-name`. The smoke now uses the local fixture, asserts the brush keyboard mode, dispatches a minimal down/up brush gesture, and verifies `data-painter-rgba-updates >= 1` across all three engines. This reduced the test budget from 600s to 300s, but the perf-plan note about full `RgbaArray.render()` per pointer move still applies to production/default large assets.
+- **`viewer` hardening:** the viewer URL-form smoke now enters the local `/test/fixtures/assets/robot-head.spz` URL instead of a `sparkjs.dev` URL. It still exercises the real URL input, history update, UI hide/show, `SplatMesh` initialization, and splat count path. `robot-head.spz` is intentionally smaller than `butterfly.spz`; Babylon texture mode reliably finishes it.
+- **Reusable fixture asset switch:** `examples/js/get-asset-url.js` gained `testFixtureAssets=1`. It maps an explicit allowlist to `/test/fixtures/assets/...`: `butterfly-ai.spz`, `butterfly.spz`, `cat.spz`, `distant-igloo.spz`, `fireplace.spz`, `fly.spz`, `penguin.spz`, `robot-head.spz`, `rubberduck.glb`, and `valley.spz`. The generic load sweep enables this only for examples whose asset usage is covered by that allowlist, preserving the query string in engine-switcher href assertions.
+- **Focused smoke fixture rollout:** `test/e2e/multibackend-smoke.spec.ts` now has shared `exampleParams()` / `exampleQuery()` helpers. The generic load sweep and selected focused smokes use the same fixture-query logic, including `render-cube-depth`, `dynamic-lighting`, `glsl`, `envmap`, `hello-world`, `lod`, `multiple-splats`, `debug-color`, `raycasting`, `depth-of-field`, `mobile-joystick`, `extsplats`, `nonlod`, `interactive-ripples`, `interactive-deform`, `interactive-holes`, `splat-shader-effects`, `splat-dissolve-effects`, and `newportal`.
+- **`interactive-holes` hardening:** `examples/interactive-holes/index.html` gained `testHolesAsset`, and the smoke routes it to local `cat.spz`. This removes the remote `painted-bedroom.spz` dependency from the focused interaction test while preserving default example behavior.
+- **Smoke query cleanup:** all focused smoke navigations now go through `exampleQuery()` / `exampleParams()` instead of hand-built `?engine=` strings. This centralizes fixture switches (`testFixtureAssets`, `testLofiAssets`, `testPainterAsset`, `testHolesAsset`) and keeps custom knobs like `testTransitionFrames`, `testSnowSplats`, `testSkipInitialEffect`, and portal static mode in the same query builder.
+
+### Recent verification
+
+- `lofi` slice: `pnpm exec playwright test test/e2e/multibackend-smoke.spec.ts --grep "lofi" --reporter=list` — 6/6 pass.
+- `splat-painter` slice: `--grep "splat-painter"` — 6/6 pass.
+- `viewer URL form loads splat` slice — 6/6 pass.
+- `examples index` guard — 2/2 pass. `examples/index.html` lists 41 examples total; all ordinary examples are engine-aware, and only `editor`, `basic-xr`, `webxr`, `spark-babylon`, and `spark-babylon-native` remain documented exceptions.
+- Fixture-backed representative generic loads:
+  - `hello-world loads on engine` slice — 6/6 pass; grep also covered the focused hello-world animation smoke.
+  - `envmap.*engine` slice — 6/6 pass, including fixture `models/rubberduck.glb`.
+  - `render-cube-depth.*engine` slice — 6/6 pass, including the focused depth-toggle smoke.
+- Fixture-backed focused-helper slices after the shared query helper:
+  - `glsl updates` — 6/6 pass.
+  - `dynamic-lighting toggles` — 6/6 pass.
+  - `debug-color reapplies` — 6/6 pass.
+  - `raycasting click delivers` — 6/6 pass.
+  - `depth-of-field updates` — 6/6 pass.
+  - `interactive-deform drag` — 6/6 pass.
+  - `interactive-holes click` — 6/6 pass, with 3/3 hits and impulses on every engine using `cat.spz`.
+  - `splat-dissolve-effects advances` — 6/6 pass.
+  - `interactivity menu switches` — 6/6 pass after query-helper cleanup.
+  - `multiple-viewpoints renders` — 6/6 pass after query-helper cleanup.
+  - Portal family grep (`portal legacy two-pass`) — 18/18 pass; includes `newportal`, legacy `portal`, `splat-portal`, and their generic loads.
+  - `lofi cycles` — 6/6 pass after clearing stale generated Vite optimizer cache.
+  - `viewer URL form` — 6/6 pass after query-helper cleanup.
+  - `splat-painter brush` — 6/6 pass after query-helper cleanup.
+  - `mobile-joystick moves` — 6/6 pass after query-helper cleanup.
+  - `extsplats compares` — 6/6 pass after query-helper cleanup.
+- Focused slices run with the tiered testing strategy instead of a full matrix rerun:
+  - `streaming-lod switches` — 6/6 pass; includes focused world switch and generic loads.
+  - `multi-lod caps` — 6/6 pass; includes focused capped-paging smoke and generic loads.
+  - `sogs decodes` — 6/6 pass; includes the large SOGS zip decode path and generic loads.
+  - `procedural-splats builds` — 6/6 pass; includes generated text/image sources and generic loads.
+  - `nonlod toggles` — 6/6 pass; includes focused LoD/coloring toggle and generic loads.
+  - `lod toggles explicit LoD mesh state` — 3/3 pass when isolated with exact grep.
+  - `multiple-splats reuses shared packed data` — 3/3 pass.
+  - `interactive-ripples click delivers ripples` — 3/3 pass, with 3/3 hits on every backend.
+  - `splat-shader-effects swaps modifiers` — 3/3 pass.
+  - `particle-simulation updates snow controls` — 3/3 pass.
+  - `particle-animation recreates cloud presets` — 3/3 pass.
+  - `splat-flow rebuilds transition modifiers` — 3/3 pass.
+  - `lod-on-demand creates LoD tree` — 3/3 pass.
+  - `splat-reveal-effects switches effect mesh` — 3/3 pass.
+  - `splat-transitions switches dynamic effect` — 3/3 pass.
+  - A too-broad `--grep lod` run hit the shell wrapper timeout and left a channel-closed artifact for `lod loads on engine=three`; rerunning the intended exact grep passed, so this was a harness invocation issue, not a page regression. Use the WSL single-quoted grep form from the testing strategy section.
+- Last-demo index polish:
+  - `examples/index.html` now labels the page as links to each supported host/backend, not all hosts for every row.
+  - Documented exceptions now only expose supported links: `editor`, `basic-xr`, and `webxr` link to Three only; `spark-babylon` and `spark-babylon-native` link to Babylon only.
+  - Rationale: the Three-only rows are host-specific editor/XR surfaces, not missing renderer examples. Desktop renderer/runtime parity is already covered by the ordinary engine-aware examples; XR headset-session parity and editor chrome are separate work. The Babylon-only rows are already direct Babylon host references, so adding Three/A-Frame links would make the page less honest rather than more universal.
+  - The `examples index` guard asserts the exception list and each exception row's exact supported links. Verified 2/2 pass.
+- `spark-babylon-native` shader-load fix:
+  - The native Babylon reference page could throw `Failed to fetch dynamically imported module ... default.vertex/default.fragment` when Babylon 9 tried to lazy-load built-in shader chunks from Vite's optimized dependency cache.
+  - `examples/spark-babylon-native/index.html` now imports Babylon's `default.vertex`, `default.fragment`, and `standard.fragment` shader modules explicitly before constructing the scene. This keeps the Spark native `ShaderMaterial` path and the TorusKnot `StandardMaterial` path out of Babylon's async shader-chunk fallback.
+  - The page also writes `data-babylon-native-ready` and `data-babylon-native-frames` for smoke verification. `test/e2e/multibackend-smoke.spec.ts` now has a narrow `spark-babylon-native host reference loads without shader chunk errors` guard that waits for rendered frames, checks the WebGL canvas has nonzero pixels, and fails on console/page errors. Verified 1/1 pass.
+- `spark-babylon` texture-bridge reference hardening:
+  - The texture-mode Babylon reference page now imports Babylon's `layer.vertex` and `layer.fragment` shader modules explicitly before constructing the scene. This mirrors the native fix for the Layer-based texture bridge path.
+  - The page writes `data-babylon-texture-ready` and `data-babylon-texture-frames`; the smoke spec has a matching `spark-babylon host reference loads without shader chunk errors` guard that checks rendered frames, nonzero canvas pixels, and no console/page errors.
+  - Verified together with the native guard: `--grep 'spark-babylon.*host reference'` passed 2/2.
+- Shared Babylon texture-bridge shader fix:
+  - User reported live console errors on `particle-simulation`, `particle-animation`, and `splat-reveal-effects` with `?engine=babylon`: Babylon `Layer` effect compilation tried to fetch stale/missing Vite optimized chunks such as `layer.vertex-*.js` / `layer.fragment-*.js`.
+  - `examples/js/spark-engine.js setupBabylonBackend()` now explicitly imports `@babylonjs/core/Shaders/layer.vertex.js` and `@babylonjs/core/Shaders/layer.fragment.js` before importing core Babylon constructors and creating `SparkBabylonHost`. This fixes the shared engine-aware Babylon texture bridge path, not just individual demos.
+  - `test/e2e/multibackend-smoke.spec.ts` now has a narrow `reported Babylon texture-bridge demos load without layer shader chunk errors` guard for those three URLs. It waits for the engine switcher and fails on page/console errors, catching setup-level shader chunk regressions without waiting on every heavy default asset.
+  - Verification: direct Playwright probe against the three `localhost:8080` URLs had no console/page errors after the fix; the new reported-URL guard passed 1/1; focused demo smokes for `particle-simulation updates snow controls`, `particle-animation recreates cloud presets`, and `splat-reveal-effects switches effect mesh` passed 9/9.
+- Phase 3 painter coalescing:
+  - `examples/splat-painter/index.html` now coalesces expensive full-mesh `RgbaArray.render()` rebuilds through `requestAnimationFrame` instead of calling `updateRgba()` synchronously for every drag `pointermove`.
+  - The painter smoke now sends a same-tick burst of pointer moves and asserts the move count is high while `data-painter-rgba-updates` stays bounded. Verification: `splat-painter brush paints` passed 3/3 with 6 pointer moves and 2 RGBA rebuilds on each backend.
+
+### Local WSL/Vite cache caveat
+
+On 2026-06-13 a lofi smoke initially failed before the engine switcher appeared because Vite hit the known `/mnt/c` optimizer rename issue:
+
+```
+EACCES: permission denied, rename 'node_modules/.vite/deps_temp_*' -> 'node_modules/.vite/deps'
+```
+
+The fix was to remove only the generated `node_modules/.vite/deps_temp_*` directory after verifying its resolved path stayed under this repo. Re-running `lofi cycles` then passed 6/6. Do not treat this as an app regression.
+- Repeated clean checks after the hardening batches: `pnpm exec tsc --noEmit`, `pnpm exec biome check ...`, and `git diff --check ...`.
+
+### Completion read
+
+- **Feature rollout / multi-backend example coverage:** about 90-95% complete. Remaining work is hardening + broad verification, not new ordinary example ports.
+- **Perf plan:** Phases 0-2 are shipped. Phase 3 targeted optimizations and Phase 4 CI perf gating remain intentionally deferred until the feature checkpoint is cut.
+- **Whole roadmap including perf optimization/gating:** roughly 70-75% complete.
+
+### Testing strategy from here
+
+Do not run the full smoke matrix after every small edit. The current matrix is broad enough that a full run is a checkpoint tool, not a development loop.
+
+- **Tier 0, every code/doc batch:** `pnpm exec tsc --noEmit`, `pnpm exec biome check ...`, and `git diff --check ...` on the touched paths. These are cheap and catch TypeScript, formatting, and whitespace drift.
+- **Tier 1, per touched example:** run the exact focused Playwright grep for that example only, using single-quoted grep text inside WSL, for example:
+  ```bash
+  wsl bash -ic "cd /mnt/c/Users/brend/exp/spark && nvm use 20 >/dev/null && pnpm exec playwright test test/e2e/multibackend-smoke.spec.ts --grep 'splat-flow rebuilds transition modifiers' --reporter=list"
+  ```
+- **Tier 2, per touched helper/shared query path:** run representative examples that exercise the helper categories instead of every example. Suggested set: `examples index`, `hello-world animates`, `viewer URL form`, `lofi cycles`, `interactive-ripples click`, `portal legacy two-pass`, and one heavy LoD scene (`streaming-lod switches` or `multi-lod caps`).
+- **Tier 3, milestone only:** run grouped focused slices for the remaining unverified feature families, then a generic load sweep or full `multibackend-smoke.spec.ts` only before a commit/handoff that claims feature-phase completion.
+- **Tier 4, perf path:** use `pnpm run test:perf:smoke` for harness sanity. Do not start Phase 3 optimization or CI perf gating until the feature checkpoint is cut.
+
+Why: the smoke suite now validates all ordinary examples across Three, A-Frame, and Babylon, so repeated full runs spend most time re-proving unaffected examples. How to apply: pick the narrowest tier that covers the files or helper behavior touched, record the command and result here, and reserve full matrix runs for release gates.
+
+### Current caution
+
+The working tree is intentionally very dirty. Some files are Brendon's long-running WIP and must not be reverted. The Codex continuation has added changes across examples, the smoke spec, perf infra, fixture helpers, and docs; before committing, inspect scope carefully and separate unrelated WIP from feature-hardening commits.
 
 ## Status as of this handoff (2026-06-12 afternoon)
 
@@ -24,23 +142,22 @@ Verified: typecheck clean, biome clean, axes scene 8/8 still bit-perfect on all 
 
 Exports: `SparkPerfMetrics` re-exported from `src/index.ts` alongside `SparkRenderer` / `SparkRendererOptions`.
 
-### What's next — Phase 2 perf-test infrastructure (≤ 4 hours, spec'd in §4 of `docs/RENDER-PERF-PLAN.md`)
+### Phase 2 perf-test infrastructure (Codex update 2026-06-12)
 
-Codex pickup hook:
+Phase 2 is now benchmark-only so feature work can continue before optimization starts. The harness lands the speed measurements we need without a default CI gate:
 
-1. **`test/perf/render-fps.spec.ts`** — Playwright loads `test/fixtures/snapshot-{three,aframe,babylon}.html?scene=<scene>`, drives `requestAnimationFrame` for 600 frames, samples `spark.perfMetrics` each frame, records `{lastFrameMs, lastSortMs, lastAccumulateMs, lastTraverseMs, lastLodRaycastMs, lastBabylonReadbackMs}` distributions. Per-scene per-backend p50 / p95 / p99 written to JSON.
-   - The Three/A-Frame/Babylon fixtures already expose `spark` on `window` for the snapshot path — confirm via `await page.evaluate(() => window.spark.perfMetrics)`.
-   - Hot scenes for the first cut: `helloWorld` (177K splats baseline), `glsl` (dyno raw-shader path), `sogs` (cold-cache SOGS load + many splats), `splatShaderEffects` (5-variant effectType branch coverage).
-2. **Budget assertions** — first run is baseline-write only (no assertions). Second run gates against the recorded baseline within ±15% per-metric. Codex's call whether to start with assertions OFF and warn-only, or ON with a generous initial band.
-3. **`test/perf/regression-baseline.json`** — committed alongside the spec; failure messages should print the JSON line that needs updating.
-4. **`pnpm run test:perf`** — new script wrapping `playwright test test/perf/`. Separate from `test:e2e` because perf runs want their own retry/serialization policy.
+1. **`test/perf/render-fps.spec.ts`** — Playwright loads `test/fixtures/snapshot-{three,aframe,babylon}.html?scene=<scene>`, drives `requestAnimationFrame` for 600 frames by default, samples `spark.perfMetrics` each frame, prints a compact p50 / p95 terminal summary, and writes full p50 / p95 / p99 summaries to `tmp/perf/render-fps.json`. Reports and baselines include selected scenes/backends/frame counts/full-default metadata. Last-observed work-item metrics summarize changed nonzero samples so throttled producers do not duplicate one stale value across the whole frame window.
+   - Hot scenes for the default run: `helloWorld` (177K splats baseline), `glsl` (dyno raw-shader path), `sogs` (cold-cache SOGS load + many splats), `splatShaderEffects` (5-variant effectType branch coverage).
+   - Narrow development loop: `pnpm run test:perf:smoke`, or direct env overrides such as `SPARK_PERF_SCENES=axes SPARK_PERF_BACKENDS=three SPARK_PERF_FRAMES=30 pnpm run test:perf`.
+2. **Baseline behavior** — `test/perf/regression-baseline.json` starts empty. `SPARK_PERF_UPDATE_BASELINE=1 pnpm run test:perf` writes reviewed local numbers from the full default benchmark; partial baseline writes are refused unless `SPARK_PERF_ALLOW_PARTIAL_BASELINE=1` is set. `SPARK_PERF_ASSERT_BASELINE=1` turns ±15% p50 drift, or a missing committed baseline entry, into a hard failure later.
+3. **`pnpm run test:perf` / `pnpm run test:perf:smoke`** — uses `playwright.perf.config.ts`, one worker, and `test/perf-results` output, separate from `test:e2e`. The smoke script runs `axes` across all four backend modes with three measured frames.
 
-Phase 1 fields cover everything Phase 2 needs. No further SparkRenderer surface changes expected before Phase 3 optimizations.
+Phase 3 optimizations and hard CI gating remain deferred until the feature list is complete.
 
 ### Pickup notes for Phase 2
 
-- `spark` is the SparkRenderer instance; the existing fixtures put it on `window.spark` so `page.evaluate(() => window.spark.perfMetrics)` works without any new plumbing.
-- For Babylon **native** mode, `lastBabylonReadbackMs` should be `0` always — verify in the spec as a sanity check (native skips the readback path).
+- `spark` is the SparkRenderer instance; the fixtures now put it on `window.spark` and expose `window.sparkPerfBenchmark.renderFrame()` for one backend-correct benchmark frame.
+- `lastBabylonReadbackMs` currently measures `SparkBabylonTextureBridge.syncOnce()`, which is used by Babylon native material sync. Texture mode's direct `SparkBabylonHost.renderOnce()` readPixels path is not yet surfaced through that field, so the benchmark reports the metric as observed instead of asserting texture/native expectations.
 - Phase 1 fields START at `0` until their producer fires. Throttled producers (sort gated by `minSortIntervalMs`, raycast gated by `lodRaycastIntervalMs`) may not fire every frame — the perf spec should record nonzero samples only or aggregate over the full 600-frame window.
 - The `axes` smoke is the fastest sanity check (< 60s wall time for 8 sub-tests including parity). Use it as the smoke-cycle scene during Phase 2 spec development before running the heavy hot-scene set.
 

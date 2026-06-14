@@ -8,13 +8,21 @@ const canvas = document.getElementById("canvas");
 
 const env = await setupSparkExample({
   canvas,
-  cameraConfig: { fov: 50, near: 0.01, far: 2000, position: [0, 3, 8], lookAt: [0, 0, 0] },
+  cameraConfig: {
+    fov: 50,
+    near: 0.01,
+    far: 2000,
+    position: [0, 3, 8],
+    lookAt: [0, 0, 0],
+  },
   clearColor: 0x000000,
 });
 
 // GUI
 const gui = new GUI();
 const params = { Effect: "Spherical" };
+const queryParams = new URLSearchParams(window.location.search);
+const skipInitialEffect = queryParams.get("testSkipInitialEffect") === "1";
 const effectFiles = {
   Spherical: () => import("./effects/spheric.js"),
   Explosion: () => import("./effects/explosion.js"),
@@ -26,10 +34,15 @@ let active = null; // { api, group }
 let last = 0;
 let effectFolder = null; // GUI folder for current effect
 let switchCounter = 0; // guards concurrent effect switches
+let completedSwitchCount = 0;
+let frameCount = 0;
+let activeUpdateCount = 0;
 
 async function switchEffect(name) {
   const myToken = ++switchCounter;
   const loading = document.getElementById("loading");
+  document.body.dataset.splatTransitionsReady = "loading";
+  document.body.dataset.splatTransitionsRequested = name;
   loading.textContent = `Loading ${name}...`;
   loading.style.display = "block";
 
@@ -85,6 +98,16 @@ async function switchEffect(name) {
 
   if (api.group) env.add(api.group);
   active = { api, group: api.group };
+  completedSwitchCount += 1;
+  document.body.dataset.splatTransitionsReady = "true";
+  document.body.dataset.splatTransitionsActive = name;
+  document.body.dataset.splatTransitionsSwitches = String(completedSwitchCount);
+  document.body.dataset.splatTransitionsChildren = String(
+    api.group?.children?.length ?? 0,
+  );
+  document.body.dataset.splatTransitionsHasUpdate = String(
+    typeof api.update === "function",
+  );
 
   // Setup a per-effect GUI folder if exposed
   if (api.setupGUI) {
@@ -101,16 +124,28 @@ async function switchEffect(name) {
 }
 
 gui.add(params, "Effect", Object.keys(effectFiles)).onChange(switchEffect);
+window.sparkSplatTransitions = { switchEffect };
 
 // Animation loop — env.run handles the per-host setAnimationLoop /
 // runRenderLoop and feeds (time, deltaTime) into the closure.
 env.run((timeMs) => {
+  frameCount += 1;
+  document.body.dataset.splatTransitionsFrames = String(frameCount);
   const t = timeMs * 0.001;
   const dt = t - (last || t);
   last = t;
 
-  if (active?.api?.update) active.api.update(dt, t);
+  if (active?.api?.update) {
+    activeUpdateCount += 1;
+    document.body.dataset.splatTransitionsUpdates = String(activeUpdateCount);
+    active.api.update(dt, t);
+  }
 });
 
 // Kickoff
-switchEffect(params.Effect);
+if (skipInitialEffect) {
+  document.body.dataset.splatTransitionsReady = "idle";
+  document.body.dataset.splatTransitionsActive = "";
+} else {
+  switchEffect(params.Effect);
+}

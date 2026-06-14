@@ -134,6 +134,8 @@
       const camera = env.camera;
 
       const time = dyno.dynoFloat(0.0);
+      let flowFrameCount = 0;
+      let flowParamChanges = 0;
 
       async function loadAssets() {
         const sky = await loadGLB(skyFile, true);
@@ -186,28 +188,48 @@
       }
 
       const { splatMeshes, centerGLSL } = await loadAssets();
+      document.body.dataset.splatFlowReady = "true";
+      document.body.dataset.splatFlowMeshes = String(splatMeshes.length);
+      document.body.dataset.splatFlowSplats = String(
+        splatMeshes.reduce((total, mesh) => total + mesh.numSplats, 0),
+      );
+      function rebuildFlowModifiers() {
+        splatMeshes.forEach((m, i) => {
+          const { inTransition, isFadeIn, normT } = getTransitionState(time, dyno.dynoFloat(i), dyno.dynoFloat((i+1)%splatFiles.length), dyno.dynoFloat(splatFiles.length));
+          m.worldModifier = getTransitionModifier(inTransition, isFadeIn, normT, dyno.dynoInt(i), time, centerGLSL, dyno.dynoBool(PARAMETERS.fixedMinScale), dyno.dynoFloat(PARAMETERS.waves));
+          m.updateGenerator();
+        });
+        flowParamChanges += 1;
+        document.body.dataset.splatFlowChanges = String(flowParamChanges);
+        document.body.dataset.splatFlowFixedMinScale = String(PARAMETERS.fixedMinScale);
+        document.body.dataset.splatFlowWaves = String(PARAMETERS.waves);
+        document.body.dataset.splatFlowPaused = String(PARAMETERS.pause);
+      }
+      window.sparkSplatFlow = {
+        setParams({ fixedMinScale, waves, pause }) {
+          if (fixedMinScale !== undefined) PARAMETERS.fixedMinScale = fixedMinScale;
+          if (waves !== undefined) PARAMETERS.waves = waves;
+          if (pause !== undefined) PARAMETERS.pause = pause;
+          rebuildFlowModifiers();
+          return { changes: flowParamChanges };
+        },
+      };
       const gui = new GUI();
       gui.add(PARAMETERS, "speedMultiplier", 0.25, 4.0, 0.01);
       gui.add(PARAMETERS, "objectRotation");
       gui.add(PARAMETERS, "pause");
       gui.add(PARAMETERS, "cameraRotation");
       gui.add(PARAMETERS, "fixedMinScale").onChange(() => {
-        splatMeshes.forEach((m, i) => {
-          const { inTransition, isFadeIn, normT } = getTransitionState(time, dyno.dynoFloat(i), dyno.dynoFloat((i+1)%splatFiles.length), dyno.dynoFloat(splatFiles.length));
-          m.worldModifier = getTransitionModifier(inTransition, isFadeIn, normT, dyno.dynoInt(i), time, centerGLSL, dyno.dynoBool(PARAMETERS.fixedMinScale), dyno.dynoFloat(PARAMETERS.waves));
-          m.updateGenerator();
-        });
+        rebuildFlowModifiers();
       });
       gui.add(PARAMETERS, "waves", 0, 1, 0.01).onChange(() => {
-        splatMeshes.forEach((m, i) => {
-          const { inTransition, isFadeIn, normT } = getTransitionState(time, dyno.dynoFloat(i), dyno.dynoFloat((i+1)%splatFiles.length), dyno.dynoFloat(splatFiles.length));
-          m.worldModifier = getTransitionModifier(inTransition, isFadeIn, normT, dyno.dynoInt(i), time, centerGLSL, dyno.dynoBool(PARAMETERS.fixedMinScale), dyno.dynoFloat(PARAMETERS.waves));
-          m.updateGenerator();
-        });
+        rebuildFlowModifiers();
       });
 
       let last = 0;
       env.run((rt) => {
+        flowFrameCount += 1;
+        document.body.dataset.splatFlowFrames = String(flowFrameCount);
         const t = rt * 0.0005;
         const dt = t - last;
         last = t;

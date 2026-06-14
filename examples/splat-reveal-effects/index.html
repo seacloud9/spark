@@ -55,12 +55,17 @@
     };
 
     let splatMesh = null;
+    let revealLoadCount = 0;
+    let revealFrameCount = 0;
 
       /**
        * Loads and configures splat mesh based on selected effect
        * @param {string} effect - The effect type (Magic, Spread, Unroll, Twister, or Rain)
        */
     async function loadSplatForEffect(effect) {
+      revealLoadCount += 1;
+      document.body.dataset.revealEffectsReady = "loading";
+      document.body.dataset.revealEffectsLoads = String(revealLoadCount);
       // Clean up existing splat mesh
       if (splatMesh) {
         env.scene.remove(splatMesh);
@@ -100,12 +105,15 @@
 
       // Wait for asset loading and reset animation timing
       splatLoaded = false;
-      await splatMesh.loaded;
+      await splatMesh.initialized;
       splatLoaded = true;
       baseTime = 0;
 
       // Apply visual effects to the loaded splat
       setupSplatModifier();
+      document.body.dataset.revealEffectsReady = "true";
+      document.body.dataset.revealEffectsActive = effect;
+      document.body.dataset.revealEffectsSplats = String(splatMesh.numSplats);
     }
 
     // Initialize user interface
@@ -283,11 +291,16 @@
 
     // Initialize with default effect
     await loadSplatForEffect(effectParams.effect);
+    window.sparkRevealEffects = {
+      loadEffect: loadSplatForEffect,
+    };
 
     // Initialize camera controls and start render loop
     const controls = new SparkControls({ canvas: env.canvas });
 
     env.run(() => {
+      revealFrameCount += 1;
+      document.body.dataset.revealEffectsFrames = String(revealFrameCount);
       // Update animation timing
       if (splatLoaded) {
         baseTime += 1/60;

@@ -40,6 +40,7 @@
     butterfly.quaternion.set(1, 0, 0, 0);
     butterfly.position.set(0, 0, -1.5);
     env.add(butterfly);
+    await butterfly.initialized;
 
     // A Gsplat type is defined in GLSL in src/dyno/splats.ts as follows:
     // struct Gsplat {
@@ -53,7 +54,7 @@
     // const uint GSPLAT_FLAG_ACTIVE = 1u << 0u;
 
     // Inject GLSL color shader into world-space SplatMesh modifier
-    butterfly.worldModifier = new dyno.Dyno({
+    const worldModifier = new dyno.Dyno({
       inTypes: { gsplat: dyno.Gsplat },
       outTypes: { gsplat: dyno.Gsplat },
       globals: () => [dyno.unindent(`
@@ -70,6 +71,7 @@
         ${outputs.gsplat}.rgba.rgb *= waveRgb(${inputs.gsplat}.center);
       `),
     });
+    butterfly.worldModifier = worldModifier;
 
     // Inject DynoBlock with embedded GLSL shader that uses an external
     // uniform value animateT to control motion. Any GLSL statements can only
@@ -77,7 +79,7 @@
     // that allows us to get `t` as an input parameter to our GLSL block.
     const animateT = dyno.dynoFloat(0);
 
-    butterfly.objectModifier = dyno.dynoBlock(
+    const objectModifier = dyno.dynoBlock(
       { gsplat: dyno.Gsplat },
       { gsplat: dyno.Gsplat },
       ({ gsplat }) => {
@@ -107,13 +109,36 @@
         return { gsplat };
       },
     );
+    butterfly.objectModifier = objectModifier;
 
     // Make sure to update the generator after updating modifiers
     butterfly.updateGenerator();
+    document.body.dataset.glslReady = "true";
+    document.body.dataset.glslSplats = String(butterfly.numSplats);
+    document.body.dataset.glslHasWorldModifier = String(worldModifier != null);
+    document.body.dataset.glslHasObjectModifier = String(objectModifier != null);
+    document.body.dataset.glslAnimateT = String(animateT.value);
+    let frameCount = 0;
+    let updates = 0;
+
+    window.sparkGlsl = {
+      setAnimateT(value) {
+        animateT.value = value;
+        butterfly.updateVersion();
+        updates += 1;
+        document.body.dataset.glslAnimateT = String(value);
+        document.body.dataset.glslLastSetAnimateT = String(value);
+        document.body.dataset.glslUpdates = String(updates);
+        return animateT.value;
+      },
+    };
 
     const controls = new SparkControls({ canvas: env.renderer.domElement });
     env.run((time) => {
+      frameCount += 1;
       animateT.value = time / 1000;
+      document.body.dataset.glslFrames = String(frameCount);
+      document.body.dataset.glslAnimateT = animateT.value.toFixed(3);
       butterfly.updateVersion();
       controls.update(env.camera);
     });

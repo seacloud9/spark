@@ -47,12 +47,49 @@
     const butterfly2 = new SplatMesh({ url: splatURL });
     butterfly2.quaternion.set(1, 0, 0, 0);
     butterfly2.position.set(0.5, 0, -1.5);
-    modifiers.setDepthColor(butterfly2, 1, 2, true);
+    let depthParams = modifiers.setDepthColor(butterfly2, 1, 2, true);
     env.add(butterfly2);
+    await Promise.all([butterfly.initialized, butterfly2.initialized]);
+
+    let frameCount = 0;
+    let updates = 0;
+
+    function recordDebugColorState() {
+      document.body.dataset.debugColorReady = "true";
+      document.body.dataset.debugColorMeshes = "2";
+      document.body.dataset.debugColorNormal = "true";
+      document.body.dataset.debugColorDepthMin = String(depthParams.minDepth.value);
+      document.body.dataset.debugColorDepthMax = String(depthParams.maxDepth.value);
+      document.body.dataset.debugColorDepthReverse = String(depthParams.reverse.value);
+      document.body.dataset.debugColorSplatsA = String(butterfly.numSplats);
+      document.body.dataset.debugColorSplatsB = String(butterfly2.numSplats);
+      document.body.dataset.debugColorFrames = String(frameCount);
+      document.body.dataset.debugColorUpdates = String(updates);
+      document.body.dataset.debugColorRotY = butterfly.rotation.y.toFixed(3);
+      document.body.dataset.debugColorRotX = butterfly2.rotation.x.toFixed(3);
+    }
+
+    recordDebugColorState();
+
+    window.sparkDebugColor = {
+      setDepthRange(minDepth, maxDepth, reverse) {
+        depthParams = modifiers.setDepthColor(butterfly2, minDepth, maxDepth, reverse);
+        updates += 1;
+        recordDebugColorState();
+        return {
+          maxDepth: depthParams.maxDepth.value,
+          minDepth: depthParams.minDepth.value,
+          reverse: depthParams.reverse.value,
+          updates,
+        };
+      },
+    };
 
     env.run((_time, deltaTime) => {
+      frameCount += 1;
       butterfly.rotation.y += deltaTime / 2500;
       butterfly2.rotation.x += deltaTime / 2500;
+      recordDebugColorState();
     });
   </script>
 </body>

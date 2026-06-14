@@ -47,6 +47,9 @@
       cameraConfig: { fov: 75, near: 0.01, position: [0, 0, 1], lookAt: [0, 0, 0] },
       sparkOptions: { outsideFoveate: 1.0, behindFoveate: 1.0 },
     });
+    const queryParams = new URLSearchParams(window.location.search);
+    const testSplatAsset = queryParams.get("testSplatAsset");
+    const charCount = Number(queryParams.get("testCharCount") ?? 2);
 
     const stats = new Stats();
     document.body.appendChild(stats.dom);
@@ -70,7 +73,7 @@
     });
     gui.add(controls.pointerControls, "reverseRotate").name("Reverse controls").listen();
 
-    const url = await getAssetFileURL("valley.spz");
+    const url = await getAssetFileURL(testSplatAsset ?? "valley.spz");
     const splats = new SplatMesh({ url, lod: true, nonLod: true });
     splats.quaternion.set(1, 0, 0, 0);
     env.add(splats);
@@ -86,7 +89,8 @@
       nonLod: true,
     });
 
-    for (let i = 0; i < 2; ++i) {
+    const characterMeshes = [];
+    for (let i = 0; i < charCount; ++i) {
       const packedSplats = (i % 2) === 0 ? char1 : char2;
       const mesh = new SplatMesh({
         packedSplats,
@@ -98,12 +102,61 @@
       mesh.position.set(0.3 * (i % 3) - 1, 0, 0.3 * Math.floor(i / 3) - 2);
       mesh.scale.setScalar(0.3);
       env.add(mesh);
+      characterMeshes.push(mesh);
     }
+    await Promise.all([
+      splats.initialized,
+      char1.initialized,
+      char2.initialized,
+      ...characterMeshes.map((mesh) => mesh.initialized),
+    ]);
 
     const lastPos = new THREE.Vector3().setScalar(Number.NEGATIVE_INFINITY);
     const lastDir = new THREE.Vector3();
+    let frameCount = 0;
+    let updates = 0;
+
+    function recordLodState() {
+      document.body.dataset.lodReady = "true";
+      document.body.dataset.lodCharacterMeshes = String(characterMeshes.length);
+      document.body.dataset.lodMainSplats = String(splats.numSplats);
+      document.body.dataset.lodChar1Splats = String(char1.numSplats);
+      document.body.dataset.lodChar2Splats = String(char2.numSplats);
+      document.body.dataset.lodMainEnabled = String(splats.enableLod);
+      document.body.dataset.lodSplatScale = String(splats.lodScale);
+      document.body.dataset.lodRenderEnabled = String(renderEnable.value);
+      document.body.dataset.lodFrames = String(frameCount);
+      document.body.dataset.lodUpdates = String(updates);
+    }
+
+    recordLodState();
+
+    window.sparkLodExample = {
+      setParams(params) {
+        if (params.enableLod != null) {
+          splats.enableLod = params.enableLod;
+        }
+        if (params.lodScale != null) {
+          splats.lodScale = params.lodScale;
+        }
+        if (params.renderEnabled != null) {
+          renderEnable.value = params.renderEnabled;
+          if (renderEnable.value) lastMoved = performance.now();
+        }
+        splats.updateVersion();
+        updates += 1;
+        recordLodState();
+        return {
+          enableLod: splats.enableLod,
+          lodScale: splats.lodScale,
+          renderEnabled: renderEnable.value,
+          updates,
+        };
+      },
+    };
 
     env.run(() => {
+      frameCount += 1;
       stats.begin();
       controls.update(env.camera);
 
@@ -121,6 +174,7 @@
       if (now - lastMoved > RENDER_TIMEOUT_MS) {
         renderEnable.value = false;
       }
+      recordLodState();
       stats.end();
     });
   </script>

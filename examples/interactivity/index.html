@@ -83,6 +83,9 @@
 
     // Current and next food splats
     let food, nextFood;
+    let nextFoodIndex = -1;
+    let switchCount = 0;
+    let frameCount = 0;
     // Other items
     let table, shadow;
 
@@ -94,7 +97,15 @@
 
     // Transition length in frames.
     // Two transitions: one for fading out the old food, another for fading in the next one
-    const TRANSITION_LENGTH = IS_MOBILE ? 30 : 60;
+    const transitionFrameParam = Number(
+      new URLSearchParams(window.location.search).get("testTransitionFrames"),
+    );
+    const TRANSITION_LENGTH =
+      Number.isFinite(transitionFrameParam) && transitionFrameParam > 0
+        ? Math.floor(transitionFrameParam)
+        : IS_MOBILE
+          ? 30
+          : 60;
     // Transition timers. `null` if transition is not active
     let fadeOutTime = null;
     let fadeInTime = null;
@@ -158,6 +169,8 @@
     }
 
     function animate(time) {
+      frameCount += 1;
+      document.body.dataset.interactivityFrames = String(frameCount);
       controls.update();
       const rotation = time / 10000;
       table.rotation.y = rotation;
@@ -175,6 +188,7 @@
           fadeOutTime = null;
           // Fade in next food
           fadeInTime = 0;
+          document.body.dataset.interactivityTransition = "fade-in";
           shadow.visible = true;
           shadow.scale.setScalar(shadow.nextScale);
         }
@@ -189,6 +203,8 @@
 
           // Fade in finished
           food = nextFood;
+          document.body.dataset.interactivityActiveFood = String(nextFoodIndex);
+          document.body.dataset.interactivityTransition = "idle";
           fadeInTime = null;
         }
       }
@@ -201,6 +217,12 @@
       if (fadeOutTime !== null || fadeInTime !== null) return;
 
       const foodItem = FOOD_ASSETS[foodIndex];
+      nextFoodIndex = foodIndex;
+      switchCount += 1;
+      document.body.dataset.interactivityReady = "true";
+      document.body.dataset.interactivitySwitches = String(switchCount);
+      document.body.dataset.interactivityRequestedFood = String(foodIndex);
+      document.body.dataset.interactivityTransition = "loading";
 
       nextFood = splats[foodItem.file];
       nextFood.quaternion.set(1, 0, 0, 0);
@@ -215,6 +237,9 @@
 
       // Setup shadow to the required size, and make it visible only when the splat is initialized
       nextFood.initialized.then(() => {
+        document.body.dataset.interactivityLoadedFood = String(foodIndex);
+        document.body.dataset.interactivityActiveFood = String(foodIndex);
+        document.body.dataset.interactivityTransition = "fade-out";
         shadow.visible = false;
         fadeOutTime = 0; // Fade in next food
       });

@@ -45,6 +45,8 @@
       }
     </script>
     <script type="module">
+      import "@babylonjs/core/Shaders/layer.vertex.js";
+      import "@babylonjs/core/Shaders/layer.fragment.js";
       import {
         Color4,
         Engine,
@@ -145,6 +147,7 @@
       host.add(axes);
 
       await scene.whenReadyAsync();
+      document.body.dataset.babylonTextureReady = "true";
 
       let frame = 0;
       engine.runRenderLoop(async () => {
@@ -156,6 +159,7 @@
         await host.renderOnce();
         scene.render();
         frame++;
+        document.body.dataset.babylonTextureFrames = String(frame);
       });
 
       window.addEventListener("resize", () => {

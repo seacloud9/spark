@@ -38,9 +38,31 @@
     butterfly.quaternion.set(1, 0, 0, 0);
     butterfly.position.set(0, 0, -3);
     env.add(butterfly);
+    await butterfly.initialized;
+    let frameCount = 0;
+
+    function recordHelloWorldState() {
+      document.body.dataset.helloWorldReady = "true";
+      document.body.dataset.helloWorldSplats = String(butterfly.numSplats);
+      document.body.dataset.helloWorldFrames = String(frameCount);
+      document.body.dataset.helloWorldRotY = butterfly.rotation.y.toFixed(3);
+      document.body.dataset.helloWorldScale = butterfly.scale.x.toFixed(3);
+    }
+
+    recordHelloWorldState();
+
+    window.sparkHelloWorld = {
+      setScale(value) {
+        butterfly.scale.setScalar(value);
+        recordHelloWorldState();
+        return { scale: butterfly.scale.x };
+      },
+    };
 
     env.run((_time, deltaTime) => {
+      frameCount += 1;
       butterfly.rotation.y += deltaTime / 2500;
+      recordHelloWorldState();
     });
   </script>
 </body>

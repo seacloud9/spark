@@ -65,15 +65,21 @@
     scene.add(localFrame);
     localFrame.add(camera);
 
+    let portalFrameCount = 0;
+    let portalCrossCount = 0;
+    function recordPortalCross(pair, fromEntry) {
+      portalCrossCount += 1;
+      document.body.dataset.newPortalCrosses = String(portalCrossCount);
+      document.body.dataset.newPortalLastCross = fromEntry ? "entry-exit" : "exit-entry";
+      console.log(`Crossed portal: ${fromEntry ? 'entry→exit' : 'exit→entry'}`);
+    }
+
     // ========== Portal System ==========
     const portals = new SparkPortals({
       renderer,
       scene,
       camera,
       localFrame,
-      onPortalCross: (pair, fromEntry) => {
-      console.log(`Crossed portal: ${fromEntry ? 'entry→exit' : 'exit→entry'}`);
-      },
       defaultPortalRadius: 1.0,
       sparkOptions: {
         maxStdDev: Math.sqrt(4),
@@ -86,14 +92,15 @@
     });
 
     // Add first portal pair
-    const pair1 = portals.addPortalPair({ radius: 1.0 });
+    const pair1 = portals.addPortalPair({ radius: 1.0, onCross: recordPortalCross });
     pair1.entryPortal.position.set(0, 0, -1);
     pair1.exitPortal.position.set(-3, 0, -4.5);
 
     // Add second portal pair (smaller)
-    const pair2 = portals.addPortalPair({ radius: 1.0 });
+    const pair2 = portals.addPortalPair({ radius: 1.0, onCross: recordPortalCross });
     pair2.entryPortal.position.set(4, 0, -2);
     pair2.exitPortal.position.set(5, 0, -8);
+    document.body.dataset.newPortalPairs = String(portals.portalPairs.length);
 
     // ========== Load Splat Assets ==========
     async function loadPortalSplat() {
@@ -110,10 +117,32 @@
       mesh.quaternion.fromArray([1, 0, 0, 0]);
 
       scene.add(mesh);
+      document.body.dataset.newPortalReady = "true";
+      document.body.dataset.newPortalSplats = String(mesh.numSplats);
       console.log("Loaded", url);
     }
 
     await loadPortalSplat();
+
+    window.sparkNewPortal = {
+      forceEntryCross() {
+        localFrame.position.set(0, 0, 0);
+        localFrame.quaternion.identity();
+        localFrame.updateMatrixWorld(true);
+        camera.updateMatrixWorld(true);
+        portals.updateTeleportation();
+
+        localFrame.position.set(0, 0, -1.2);
+        localFrame.updateMatrixWorld(true);
+        camera.updateMatrixWorld(true);
+        portals.updateTeleportation();
+
+        return {
+          crosses: portalCrossCount,
+          position: localFrame.position.toArray(),
+        };
+      },
+    };
 
     // ========== Controls ==========
     const controls = new SparkControls({
@@ -165,6 +194,8 @@
     });
 
     env.runManual(() => {
+      portalFrameCount += 1;
+      document.body.dataset.newPortalFrames = String(portalFrameCount);
       stats.begin();
 
       // Update controls

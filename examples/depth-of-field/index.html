@@ -37,6 +37,8 @@
       cameraConfig: { fov: 60, position: [0, 0, 0], lookAt: [0, 0, -1] },
       sparkOptions: { apertureAngle: 0.02, focalDistance: 5.0 },
     });
+    const queryParams = new URLSearchParams(window.location.search);
+    const testAsset = queryParams.get("testAsset");
 
     const apertureSize = { apertureSize: 0.1 };
     function updateApertureAngle() {
@@ -55,11 +57,42 @@
     gui.add(apertureSize, "apertureSize", 0, 0.4, 0.01).name("Aperture size")
       .onChange(updateApertureAngle);
 
-    const splatURL = await getAssetFileURL("valley.spz");
+    const splatURL = await getAssetFileURL(testAsset ?? "valley.spz");
     const background = new SplatMesh({ url: splatURL });
     background.quaternion.set(1, 0, 0, 0);
     background.scale.setScalar(0.5);
     env.add(background);
+    await background.initialized;
+
+    function recordDepthOfFieldState() {
+      document.body.dataset.depthOfFieldFocalDistance = String(env.spark.focalDistance);
+      document.body.dataset.depthOfFieldApertureAngle = env.spark.apertureAngle.toFixed(6);
+      document.body.dataset.depthOfFieldApertureSize = String(apertureSize.apertureSize);
+    }
+
+    document.body.dataset.depthOfFieldReady = "true";
+    document.body.dataset.depthOfFieldSplats = String(background.numSplats);
+    document.body.dataset.depthOfFieldAsset = splatURL.substring(splatURL.lastIndexOf("/") + 1);
+    recordDepthOfFieldState();
+    let frameCount = 0;
+
+    window.sparkDepthOfField = {
+      setParams(params) {
+        if (params.focalDistance != null) {
+          env.spark.focalDistance = params.focalDistance;
+        }
+        if (params.apertureSize != null) {
+          apertureSize.apertureSize = params.apertureSize;
+        }
+        updateApertureAngle();
+        recordDepthOfFieldState();
+        return {
+          apertureAngle: env.spark.apertureAngle,
+          apertureSize: apertureSize.apertureSize,
+          focalDistance: env.spark.focalDistance,
+        };
+      },
+    };
 
     // SparkControls binds pointer + WASD to a Three camera + renderer.
     // Under the Babylon backend, env.renderer is still the internal Three
@@ -68,6 +101,8 @@
     const controls = new SparkControls({ canvas: env.renderer.domElement });
 
     env.run(() => {
+      frameCount += 1;
+      document.body.dataset.depthOfFieldFrames = String(frameCount);
       controls.update(env.camera);
     });
   </script>

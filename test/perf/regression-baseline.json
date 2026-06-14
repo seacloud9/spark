@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "generatedAt": null,
+  "frames": 600,
+  "warmupFrames": 60,
+  "scenes": ["helloWorld", "glsl", "sogs", "splatShaderEffects"],
+  "backends": ["three", "aframe", "babylon-texture", "babylon-native"],
+  "isFullDefaultRun": true,
+  "tolerance": {
+    "timeRatio": 0.15
+  },
+  "results": {}
+}

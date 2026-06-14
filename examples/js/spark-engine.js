@@ -187,6 +187,10 @@ async function setupBabylonBackend({
   time,
 }) {
   const c = attachCanvas(canvas);
+  await Promise.all([
+    import("@babylonjs/core/Shaders/layer.vertex.js"),
+    import("@babylonjs/core/Shaders/layer.fragment.js"),
+  ]);
   const { Color4, Engine, FreeCamera, Layer, RawTexture, Scene, Texture, Vector3 } =
     await import("@babylonjs/core");
 
